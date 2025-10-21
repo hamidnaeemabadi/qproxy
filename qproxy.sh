@@ -6,7 +6,7 @@
 ########################################################
 
 # Vars
-VERSION="v1.6"
+VERSION="v1.9"
 
 SCRIPT_NAME="QProxy for Linux $VERSION by Hamid Naeemabadi"
 
@@ -49,9 +49,9 @@ check_deps() {
     # Install dependencies based on distribution
     case $distro in
         "ubuntu"|"debian"|"linuxmint"|"pop"|"elementary")
-            which dialog >/dev/null 2>&1 || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq dialog >/dev/null 2>&1
-            which jq >/dev/null 2>&1 || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq jq >/dev/null 2>&1
-            which curl >/dev/null 2>&1 || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl >/dev/null 2>&1
+    which dialog >/dev/null 2>&1 || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq dialog >/dev/null 2>&1
+    which jq >/dev/null 2>&1 || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq jq >/dev/null 2>&1
+    which curl >/dev/null 2>&1 || sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq curl >/dev/null 2>&1
             ;;
         "fedora"|"rhel"|"centos"|"rocky"|"almalinux"|"oracle")
             which dialog >/dev/null 2>&1 || sudo dnf install -y -q dialog >/dev/null 2>&1 || sudo yum install -y -q dialog >/dev/null 2>&1
@@ -105,37 +105,37 @@ check_and_install_proxychains() {
             case $distro in
                 "ubuntu"|"debian"|"linuxmint"|"pop"|"elementary")
                     if sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq proxychains4 >/dev/null 2>&1; then
-                        dialog --title "Success" --msgbox "Proxychains4 installed successfully!\n\nYou can now use the proxychains configuration features." 8 50
+                        dialog --title "Success" --msgbox "Proxychains4 installed successfully!" 6 50
                         return 0
                     else
-                        dialog --title "Error" --msgbox "Failed to install proxychains4.\n\nPlease install it manually:\napt install proxychains4" 8 50
+                        dialog --title "Error" --msgbox "Failed to install proxychains4.\n\nPlease install manually: apt install proxychains4" 7 50
                         return 1
                     fi
                     ;;
                 "fedora"|"rhel"|"centos"|"rocky"|"almalinux"|"oracle")
                     if sudo dnf install -y -q proxychains-ng >/dev/null 2>&1 || sudo yum install -y -q proxychains-ng >/dev/null 2>&1; then
-                        dialog --title "Success" --msgbox "Proxychains-ng installed successfully!\n\nYou can now use the proxychains configuration features." 8 50
+                        dialog --title "Success" --msgbox "Proxychains-ng installed successfully!" 6 50
                         return 0
                     else
-                        dialog --title "Error" --msgbox "Failed to install proxychains-ng.\n\nPlease install it manually:\ndnf install proxychains-ng\nor\nyum install proxychains-ng" 10 50
+                        dialog --title "Error" --msgbox "Failed to install proxychains-ng.\n\nPlease install manually:\ndnf install proxychains-ng" 7 50
                         return 1
                     fi
                     ;;
                 "arch"|"manjaro"|"endeavouros")
                     if sudo pacman -S --noconfirm proxychains-ng >/dev/null 2>&1; then
-                        dialog --title "Success" --msgbox "Proxychains-ng installed successfully!\n\nYou can now use the proxychains configuration features." 8 50
+                        dialog --title "Success" --msgbox "Proxychains-ng installed successfully!" 6 50
                         return 0
                     else
-                        dialog --title "Error" --msgbox "Failed to install proxychains-ng.\n\nPlease install it manually:\npacman -S proxychains-ng" 8 50
+                        dialog --title "Error" --msgbox "Failed to install proxychains-ng.\n\nPlease install manually: pacman -S proxychains-ng" 7 50
                         return 1
                     fi
                     ;;
                 "opensuse"|"sles")
                     if sudo zypper install -y proxychains-ng >/dev/null 2>&1; then
-                        dialog --title "Success" --msgbox "Proxychains-ng installed successfully!\n\nYou can now use the proxychains configuration features." 8 50
+                        dialog --title "Success" --msgbox "Proxychains-ng installed successfully!" 6 50
                         return 0
                     else
-                        dialog --title "Error" --msgbox "Failed to install proxychains-ng.\n\nPlease install it manually:\nzypper install proxychains-ng" 8 50
+                        dialog --title "Error" --msgbox "Failed to install proxychains-ng.\n\nPlease install manually: zypper install proxychains-ng" 7 50
                         return 1
                     fi
                     ;;
@@ -166,11 +166,43 @@ check_and_install_proxychains() {
                     ;;
             esac
             
-            dialog --title "Info" --msgbox "Proxychains4 installation cancelled.\n\nYou can install it later with:\n$manual_cmd" 8 50
+                        dialog --title "Info" --msgbox "Proxychains installation cancelled.\n\nYou can install it later with:\n$manual_cmd" 7 50
             return 1
         fi
     else
         return 0
+    fi
+}
+
+# Function to apply proxy to current session
+apply_proxy_to_current_session() {
+    # Apply proxy environment variables to current session
+    export HTTP_PROXY="http://$HTTP_HOST:$HTTP_PORT"
+    export http_proxy="http://$HTTP_HOST:$HTTP_PORT"
+    export HTTPS_PROXY="http://$HTTP_HOST:$HTTP_PORT"
+    export https_proxy="http://$HTTP_HOST:$HTTP_PORT"
+    export NO_PROXY="$NO_PROXY_HOSTS"
+    export no_proxy="$NO_PROXY_HOSTS"
+    export HTTP_PROXY_CONNECTION_TIMEOUT="$PROXY_TIMEOUT"
+    export HTTP_PROXY_READ_TIMEOUT="$PROXY_READ_TIMEOUT"
+    
+    # Also apply to all existing shells for the current user
+    if [ -n "$SUDO_USER" ]; then
+        # If running as sudo, apply to the original user's shells
+        USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+        USER_SHELLS=$(ps -u "$SUDO_USER" -o pid= -o comm= | grep -E "(bash|zsh|sh|fish)" | awk '{print $1}')
+        
+        for pid in $USER_SHELLS; do
+            if [ -d "/proc/$pid" ]; then
+                # Export environment variables to the shell process
+                echo "export HTTP_PROXY=\"http://$HTTP_HOST:$HTTP_PORT\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
+                echo "export http_proxy=\"http://$HTTP_HOST:$HTTP_PORT\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
+                echo "export HTTPS_PROXY=\"http://$HTTP_HOST:$HTTP_PORT\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
+                echo "export https_proxy=\"http://$HTTP_HOST:$HTTP_PORT\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
+                echo "export NO_PROXY=\"$NO_PROXY_HOSTS\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
+                echo "export no_proxy=\"$NO_PROXY_HOSTS\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
+            fi
+        done
     fi
 }
 
@@ -181,6 +213,7 @@ set_os_env_http_proxy() {
         dialog --title "Warning" --msgbox "Proxy health check failed. Proceeding anyway, but you may experience issues." 7 50
     fi
     
+    # Create the persistent configuration file
     cat << EOP > $USER_PROXY_ENV_PATH
 export HTTP_PROXY="http://$HTTP_HOST:$HTTP_PORT"
 export http_proxy="http://$HTTP_HOST:$HTTP_PORT"
@@ -191,8 +224,43 @@ export no_proxy="$NO_PROXY_HOSTS"
 export HTTP_PROXY_CONNECTION_TIMEOUT="$PROXY_TIMEOUT"
 export HTTP_PROXY_READ_TIMEOUT="$PROXY_READ_TIMEOUT"
 EOP
-    source $USER_PROXY_ENV_PATH
-    dialog --title "Success" --msgbox "HTTP Proxy enabled on OS ENV successfully, Please logoff and reconnect to the server to unset proxy from your shell." 7 50
+    
+    # Apply to current session immediately
+    apply_proxy_to_current_session
+    
+    dialog --title "Success" --msgbox "HTTP Proxy enabled!\n\nProxy is now active in your current session and will persist after reboot." 8 50
+}
+
+# Function to apply SOCKS5 proxy to current session
+apply_socks5_proxy_to_current_session() {
+    # Apply SOCKS5 proxy environment variables to current session
+    export HTTP_PROXY="socks5h://$SOCKS5_HOST:$SOCKS5_PORT"
+    export http_proxy="socks5h://$SOCKS5_HOST:$SOCKS5_PORT"
+    export HTTPS_PROXY="socks5h://$SOCKS5_HOST:$SOCKS5_PORT"
+    export https_proxy="socks5h://$SOCKS5_HOST:$SOCKS5_PORT"
+    export NO_PROXY="$NO_PROXY_HOSTS"
+    export no_proxy="$NO_PROXY_HOSTS"
+    export HTTP_PROXY_CONNECTION_TIMEOUT="$PROXY_TIMEOUT"
+    export HTTP_PROXY_READ_TIMEOUT="$PROXY_READ_TIMEOUT"
+    
+    # Also apply to all existing shells for the current user
+    if [ -n "$SUDO_USER" ]; then
+        # If running as sudo, apply to the original user's shells
+        USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
+        USER_SHELLS=$(ps -u "$SUDO_USER" -o pid= -o comm= | grep -E "(bash|zsh|sh|fish)" | awk '{print $1}')
+        
+        for pid in $USER_SHELLS; do
+            if [ -d "/proc/$pid" ]; then
+                # Export environment variables to the shell process
+                echo "export HTTP_PROXY=\"socks5h://$SOCKS5_HOST:$SOCKS5_PORT\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
+                echo "export http_proxy=\"socks5h://$SOCKS5_HOST:$SOCKS5_PORT\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
+                echo "export HTTPS_PROXY=\"socks5h://$SOCKS5_HOST:$SOCKS5_PORT\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
+                echo "export https_proxy=\"socks5h://$SOCKS5_HOST:$SOCKS5_PORT\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
+                echo "export NO_PROXY=\"$NO_PROXY_HOSTS\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
+                echo "export no_proxy=\"$NO_PROXY_HOSTS\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
+            fi
+        done
+    fi
 }
 
 # Function to set os socks5 proxy
@@ -202,6 +270,7 @@ set_os_env_socks5_proxy() {
         dialog --title "Warning" --msgbox "Proxy health check failed. Proceeding anyway, but you may experience issues." 7 50
     fi
     
+    # Create the persistent configuration file
     sudo cat << EOP > $USER_PROXY_ENV_PATH
 export HTTP_PROXY="socks5h://$SOCKS5_HOST:$SOCKS5_PORT"
 export http_proxy="socks5h://$SOCKS5_HOST:$SOCKS5_PORT"
@@ -212,20 +281,53 @@ export no_proxy="$NO_PROXY_HOSTS"
 export HTTP_PROXY_CONNECTION_TIMEOUT="$PROXY_TIMEOUT"
 export HTTP_PROXY_READ_TIMEOUT="$PROXY_READ_TIMEOUT"
 EOP
-    source $USER_PROXY_ENV_PATH
-    dialog --title "Success" --msgbox "SOCKS5 Proxy enabled on OS ENV successfully, Please logoff and reconnect to the server to unset proxy from your shell." 7 50
+    
+    # Apply to current session immediately
+    apply_socks5_proxy_to_current_session
+    
+    dialog --title "Success" --msgbox "SOCKS5 Proxy enabled!\n\nProxy is now active in your current session and will persist after reboot." 8 50
 }
 
-# Function to disable os proxy
-disable_os_env_proxy() {
-    rm -f $USER_PROXY_ENV_PATH
+# Function to remove proxy from current session
+remove_proxy_from_current_session() {
+    # Remove proxy environment variables from current session
     unset HTTP_PROXY
     unset http_proxy
     unset HTTPS_PROXY
     unset https_proxy
     unset NO_PROXY
     unset no_proxy
-    dialog --title "Success" --msgbox "HTTP/SOCKS5 Proxy disabled on OS ENV successfully, Please logoff and reconnect to the server to unset proxy from your shell." 7 50
+    unset HTTP_PROXY_CONNECTION_TIMEOUT
+    unset HTTP_PROXY_READ_TIMEOUT
+    
+    # Also remove from all existing shells for the current user
+    if [ -n "$SUDO_USER" ]; then
+        # If running as sudo, remove from the original user's shells
+        USER_SHELLS=$(ps -u "$SUDO_USER" -o pid= -o comm= | grep -E "(bash|zsh|sh|fish)" | awk '{print $1}')
+        
+        for pid in $USER_SHELLS; do
+            if [ -d "/proc/$pid" ]; then
+                # Unset environment variables in the shell process
+                echo "unset HTTP_PROXY" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
+                echo "unset http_proxy" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
+                echo "unset HTTPS_PROXY" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
+                echo "unset https_proxy" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
+                echo "unset NO_PROXY" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
+                echo "unset no_proxy" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
+            fi
+        done
+    fi
+}
+
+# Function to disable os proxy
+disable_os_env_proxy() {
+    # Remove the persistent configuration file
+    rm -f $USER_PROXY_ENV_PATH
+    
+    # Remove from current session immediately
+    remove_proxy_from_current_session
+    
+    dialog --title "Success" --msgbox "Proxy disabled!\n\nProxy has been removed from your current session and will not persist after reboot." 8 50
 }
 
 # Function to remove apt proxy
@@ -237,7 +339,51 @@ remove_old_apt_proxy() {
     sudo apt clean
     sudo apt autoclean >/dev/null 2>&1
     if [ "$1" != "-q" ]; then
-        dialog --title "Success" --msgbox "HTTP/SOCKS5 Proxy disabled on APT successfully." 7 50
+        dialog --title "Success" --msgbox "APT proxy disabled successfully!" 6 50
+    fi
+}
+
+# Function to remove DNF/YUM proxy
+remove_old_dnf_proxy() {
+    # Remove DNF proxy configurations
+    if [ -f /etc/dnf/dnf.conf ]; then
+        sudo sed -i '/^proxy=/d' /etc/dnf/dnf.conf
+        sudo sed -i '/^proxy_username=/d' /etc/dnf/dnf.conf
+        sudo sed -i '/^proxy_password=/d' /etc/dnf/dnf.conf
+    fi
+    
+    # Remove YUM proxy configurations
+    if [ -f /etc/yum.conf ]; then
+        sudo sed -i '/^proxy=/d' /etc/yum.conf
+        sudo sed -i '/^proxy_username=/d' /etc/yum.conf
+        sudo sed -i '/^proxy_password=/d' /etc/yum.conf
+    fi
+    
+    if [ "$1" != "-q" ]; then
+        dialog --title "Success" --msgbox "DNF/YUM proxy disabled successfully!" 6 50
+    fi
+}
+
+# Function to remove Pacman proxy
+remove_old_pacman_proxy() {
+    # Remove pacman proxy configurations
+    if [ -f /etc/pacman.conf ]; then
+        sudo sed -i '/^XferCommand/d' /etc/pacman.conf
+    fi
+    
+    if [ "$1" != "-q" ]; then
+        dialog --title "Success" --msgbox "Pacman proxy disabled successfully!" 6 50
+    fi
+}
+
+# Function to remove Zypper proxy
+remove_old_zypper_proxy() {
+    # Remove zypper proxy configurations
+    sudo zypper config --unset proxy.http >/dev/null 2>&1
+    sudo zypper config --unset proxy.https >/dev/null 2>&1
+    
+    if [ "$1" != "-q" ]; then
+        dialog --title "Success" --msgbox "Zypper proxy disabled successfully!" 6 50
     fi
 }
 
@@ -246,7 +392,7 @@ set_apt_http_proxy() {
     # Check if apt is installed
     if ! command -v apt &> /dev/null
     then
-        dialog --title "Error" --msgbox "apt could not be found." 6 50
+        dialog --title "Error" --msgbox "APT package manager not found!" 6 50
     fi
     # remove old configs
     remove_old_apt_proxy -q
@@ -262,7 +408,162 @@ Acquire::Retries "3";
 Acquire::http::No-Cache "true";
 Acquire::https::No-Cache "true";
 EOP
-    dialog --title "Success" --msgbox "HTTP Proxy enabled on apt package-manager successfully with performance optimizations." 7 50
+    dialog --title "Success" --msgbox "APT HTTP Proxy configured successfully!" 6 50
+}
+
+# Function to set DNF/YUM HTTP proxy
+set_dnf_http_proxy() {
+    # Check if dnf or yum is installed
+    if ! command -v dnf &> /dev/null && ! command -v yum &> /dev/null
+    then
+        dialog --title "Error" --msgbox "DNF/YUM package manager not found!" 6 50
+        return 1
+    fi
+    
+    # Remove old proxy configurations
+    if [ -f /etc/dnf/dnf.conf ]; then
+        sudo sed -i '/^proxy=/d' /etc/dnf/dnf.conf
+        sudo sed -i '/^proxy_username=/d' /etc/dnf/dnf.conf
+        sudo sed -i '/^proxy_password=/d' /etc/dnf/dnf.conf
+    fi
+    if [ -f /etc/yum.conf ]; then
+        sudo sed -i '/^proxy=/d' /etc/yum.conf
+        sudo sed -i '/^proxy_username=/d' /etc/yum.conf
+        sudo sed -i '/^proxy_password=/d' /etc/yum.conf
+    fi
+    
+    # Configure DNF proxy
+    if [ -f /etc/dnf/dnf.conf ]; then
+        echo "proxy=http://$HTTP_HOST:$HTTP_PORT" | sudo tee -a /etc/dnf/dnf.conf > /dev/null
+        echo "proxy_username=" | sudo tee -a /etc/dnf/dnf.conf > /dev/null
+        echo "proxy_password=" | sudo tee -a /etc/dnf/dnf.conf > /dev/null
+    fi
+    
+    # Configure YUM proxy (fallback)
+    if [ -f /etc/yum.conf ]; then
+        echo "proxy=http://$HTTP_HOST:$HTTP_PORT" | sudo tee -a /etc/yum.conf > /dev/null
+        echo "proxy_username=" | sudo tee -a /etc/yum.conf > /dev/null
+        echo "proxy_password=" | sudo tee -a /etc/yum.conf > /dev/null
+    fi
+    
+    dialog --title "Success" --msgbox "DNF/YUM HTTP Proxy configured successfully!" 6 50
+}
+
+# Function to set Pacman HTTP proxy
+set_pacman_http_proxy() {
+    # Check if pacman is installed
+    if ! command -v pacman &> /dev/null
+    then
+        dialog --title "Error" --msgbox "Pacman package manager not found!" 6 50
+        return 1
+    fi
+    
+    # Remove old proxy configurations
+    if [ -f /etc/pacman.conf ]; then
+        sudo sed -i '/^XferCommand/d' /etc/pacman.conf
+    fi
+    
+    # Configure pacman proxy using XferCommand
+    if [ -f /etc/pacman.conf ]; then
+        # Backup original pacman.conf
+        sudo cp /etc/pacman.conf /etc/pacman.conf.backup
+        
+        # Add proxy configuration
+        sudo sed -i '/^\[options\]/a XferCommand = /usr/bin/curl -x http://$HTTP_HOST:$HTTP_PORT -C - -f %u > %o' /etc/pacman.conf
+    fi
+    
+    dialog --title "Success" --msgbox "Pacman HTTP Proxy configured successfully!" 6 50
+}
+
+# Function to set Zypper HTTP proxy
+set_zypper_http_proxy() {
+    # Check if zypper is installed
+    if ! command -v zypper &> /dev/null
+    then
+        dialog --title "Error" --msgbox "Zypper package manager not found!" 6 50
+        return 1
+    fi
+    
+    # Configure zypper proxy
+    sudo zypper config --set proxy.http "http://$HTTP_HOST:$HTTP_PORT" > /dev/null 2>&1
+    sudo zypper config --set proxy.https "http://$HTTP_HOST:$HTTP_PORT" > /dev/null 2>&1
+    
+    dialog --title "Success" --msgbox "Zypper HTTP Proxy configured successfully!" 6 50
+}
+
+# Function to automatically set HTTP proxy for the detected package manager
+set_auto_package_manager_proxy() {
+    distro=$(detect_distro)
+    
+    case $distro in
+        "ubuntu"|"debian"|"linuxmint"|"pop"|"elementary")
+            set_apt_http_proxy
+            ;;
+        "fedora"|"rhel"|"centos"|"rocky"|"almalinux"|"oracle")
+            set_dnf_http_proxy
+            ;;
+        "arch"|"manjaro"|"endeavouros")
+            set_pacman_http_proxy
+            ;;
+        "opensuse"|"sles")
+            set_zypper_http_proxy
+            ;;
+        *)
+            dialog --title "Unsupported Distribution" \
+            --msgbox "Your Linux distribution ($distro) is not supported for automatic package manager proxy configuration.\n\nPlease configure your package manager proxy manually." 8 50
+            return 1
+            ;;
+    esac
+}
+
+# Function to automatically remove HTTP proxy for the detected package manager
+remove_auto_package_manager_proxy() {
+    distro=$(detect_distro)
+    
+    case $distro in
+        "ubuntu"|"debian"|"linuxmint"|"pop"|"elementary")
+            remove_old_apt_proxy
+            ;;
+        "fedora"|"rhel"|"centos"|"rocky"|"almalinux"|"oracle")
+            remove_old_dnf_proxy
+            ;;
+        "arch"|"manjaro"|"endeavouros")
+            remove_old_pacman_proxy
+            ;;
+        "opensuse"|"sles")
+            remove_old_zypper_proxy
+            ;;
+        *)
+            dialog --title "Unsupported Distribution" \
+            --msgbox "Your Linux distribution ($distro) is not supported for automatic package manager proxy removal.\n\nPlease remove your package manager proxy configuration manually." 8 50
+            return 1
+            ;;
+    esac
+}
+
+# Function to automatically test HTTP proxy for the detected package manager
+test_auto_package_manager_proxy() {
+    distro=$(detect_distro)
+    
+    case $distro in
+        "ubuntu"|"debian"|"linuxmint"|"pop"|"elementary")
+            test_apt_proxy
+            ;;
+        "fedora"|"rhel"|"centos"|"rocky"|"almalinux"|"oracle")
+            test_dnf_proxy
+            ;;
+        "arch"|"manjaro"|"endeavouros")
+            test_pacman_proxy
+            ;;
+        "opensuse"|"sles")
+            test_zypper_proxy
+            ;;
+        *)
+            dialog --title "Unsupported Distribution" \
+            --msgbox "Your Linux distribution ($distro) is not supported for automatic package manager proxy testing.\n\nPlease test your package manager proxy manually." 8 50
+            return 1
+            ;;
+    esac
 }
 
 # Function to set APT SOCKS5 proxy
@@ -270,7 +571,7 @@ set_apt_socks5_proxy() {
     # Check if apt is installed
     if ! command -v apt &> /dev/null
     then
-        dialog --title "Error" --msgbox "apt could not be found." 6 50
+        dialog --title "Error" --msgbox "APT package manager not found!" 6 50
     fi
     # remove old configs
     remove_old_apt_proxy -q
@@ -286,7 +587,7 @@ Acquire::Retries "3";
 Acquire::http::No-Cache "true";
 Acquire::https::No-Cache "true";
 EOP
-    dialog --title "Success" --msgbox "SOCKS5 Proxy enabled on apt package-manager successfully with performance optimizations." 7 50
+    dialog --title "Success" --msgbox "APT SOCKS5 Proxy configured successfully!" 6 50
 }
 
 # Function to restart Docker service carefully
@@ -316,7 +617,7 @@ set_docker_http_proxy() {
     # Check if docker is installed
     if ! command -v docker &> /dev/null
     then
-        dialog --title "Error" --msgbox "docker could not be found." 6 50
+        dialog --title "Error" --msgbox "Docker not found!" 6 50
     fi
     sudo mkdir -p /etc/systemd/system/docker.service.d
     sudo cat << EOS > /etc/systemd/system/docker.service.d/proxy.conf
@@ -360,7 +661,7 @@ EOD
 
     # Call the docker_service_restart function
     docker_service_restart
-    dialog --title "Success" --msgbox "HTTP Proxy enabled on Docker Service successfully with performance optimizations!" 6 50
+    dialog --title "Success" --msgbox "Docker HTTP Proxy configured successfully!" 6 50
 }
 
 # Function to disable Docker HTTP proxy
@@ -368,15 +669,15 @@ disable_docker_proxy() {
     # Check if docker is installed
     if ! command -v docker &> /dev/null
     then
-        dialog --title "Error" --msgbox "docker could not be found." 6 50
+        dialog --title "Error" --msgbox "Docker not found!" 6 50
     fi
     if [ -f "/etc/systemd/system/docker.service.d/proxy.conf" ]; then
         rm -f /etc/systemd/system/docker.service.d/proxy.conf
         # Call the docker_service_restart function
         docker_service_restart
-        dialog --title "Success" --msgbox "HTTP/SOCKS5 Proxy disabled on Docker Service successfully!" 6 50
+        dialog --title "Success" --msgbox "Docker proxy disabled successfully!" 6 50
     else
-    dialog --title "Info" --msgbox "The proxy was not configured in the Docker service." 6 50
+    dialog --title "Info" --msgbox "No Docker proxy configuration found." 6 50
     fi
 }
 
@@ -385,7 +686,7 @@ set_containerd_http_proxy() {
     # Check if containerd is installed
     if ! command -v containerd &> /dev/null
     then
-        dialog --title "Error" --msgbox "containerd could not be found." 6 50
+        dialog --title "Error" --msgbox "Containerd not found!" 6 50
     fi
     sudo mkdir -p /etc/systemd/system/containerd.service.d
     if [ -f "etc/systemd/system/containerd.service.d/proxy.conf" ]; then
@@ -399,7 +700,7 @@ EOS
 
     sudo systemctl daemon-reload
     sudo systemctl restart containerd
-    dialog --title "Success" --msgbox "HTTP Proxy enabled on containerd (K8s container runtime) Service successfully!" 6 50
+    dialog --title "Success" --msgbox "Containerd HTTP Proxy configured successfully!" 6 50
 }
 
 # Function to disable containerd (K8s container runtime) HTTP proxy
@@ -407,15 +708,15 @@ disable_containerd_proxy() {
     # Check if containerd is installed
     if ! command -v containerd &> /dev/null
     then
-        dialog --title "Error" --msgbox "containerd could not be found." 6 50
+        dialog --title "Error" --msgbox "Containerd not found!" 6 50
     fi    
     if [ -f "etc/systemd/system/containerd.service.d/proxy.conf" ]; then
         rm -f etc/systemd/system/containerd.service.d/proxy.conf
         sudo systemctl daemon-reload
         sudo systemctl restart containerd
-            dialog --title "Success" --msgbox "HTTP/SOCKS5 Proxy disabled on containerd (K8s container runtime) Service successfully!" 6 50
+            dialog --title "Success" --msgbox "Containerd proxy disabled successfully!" 6 50
     else
-            dialog --title "Info" --msgbox "The proxy was not configured in the containerd (K8s container runtime) service." 6 50
+            dialog --title "Info" --msgbox "No containerd proxy configuration found." 6 50
     fi
 }
 
@@ -544,7 +845,7 @@ http 	$HTTP_HOST $HTTP_PORT
 
 EOP
     
-    dialog --title "Success" --msgbox "HTTP Proxy configured in proxychains successfully!\n\nConfiguration:\n- Chain Mode: dynamic_chain\n- Proxy: http://$HTTP_HOST:$HTTP_PORT\n- DNS Protection: Enabled\n- Timeouts: Optimized" 10 60
+    dialog --title "Success" --msgbox "Proxychains HTTP Proxy configured successfully!" 6 50
 }
 
 # Function to set proxychains SOCKS5 proxy configuration
@@ -599,7 +900,7 @@ socks5 	$SOCKS5_HOST $SOCKS5_PORT
 
 EOP
     
-    dialog --title "Success" --msgbox "SOCKS5 Proxy configured in proxychains successfully!\n\nConfiguration:\n- Chain Mode: dynamic_chain\n- Proxy: socks5://$SOCKS5_HOST:$SOCKS5_PORT\n- DNS Protection: Enabled\n- Timeouts: Optimized" 10 60
+    dialog --title "Success" --msgbox "Proxychains SOCKS5 Proxy configured successfully!" 6 50
 }
 
 # Function to set proxychains with both HTTP and SOCKS5 proxies
@@ -657,7 +958,7 @@ socks5 	$SOCKS5_HOST $SOCKS5_PORT
 
 EOP
     
-    dialog --title "Success" --msgbox "Dual Proxy configured in proxychains successfully!\n\nConfiguration:\n- Chain Mode: dynamic_chain\n- Primary: http://$HTTP_HOST:$HTTP_PORT\n- Secondary: socks5://$SOCKS5_HOST:$SOCKS5_PORT\n- DNS Protection: Enabled\n- Timeouts: Optimized" 12 60
+    dialog --title "Success" --msgbox "Proxychains Dual Proxy configured successfully!" 6 50
 }
 
 # Function to disable proxychains configuration
@@ -687,9 +988,9 @@ tcp_connect_time_out 8000
 # socks4 	127.0.0.1 9050
 
 EOP
-        dialog --title "Success" --msgbox "Proxychains configuration disabled successfully!\n\nDefault configuration restored." 7 50
+        dialog --title "Success" --msgbox "Proxychains configuration disabled successfully!" 6 50
     else
-        dialog --title "Info" --msgbox "No proxychains configuration found to disable." 6 50
+        dialog --title "Info" --msgbox "No proxychains configuration found." 6 50
     fi
 }
 
@@ -702,7 +1003,7 @@ test_proxychains_config() {
     
     # Check if configuration file exists
     if [ ! -f "$PROXYCHAINS_CONF_PATH" ]; then
-        dialog --title "Error" --msgbox "Proxychains configuration file not found at $PROXYCHAINS_CONF_PATH" 7 50
+        dialog --title "Error" --msgbox "Proxychains configuration file not found!" 6 50
         return 1
     fi
     
@@ -717,11 +1018,187 @@ test_proxychains_config() {
     if [ $? -eq 0 ] && [[ "$test_result" == *"origin"* ]]; then
         echo "✅ Proxychains test successful!"
         echo "Response: $test_result"
-        dialog --title "Success" --msgbox "Proxychains configuration is working correctly!\n\nTest successful - proxy chain is functional." 8 50
+        dialog --title "Success" --msgbox "Proxychains test successful!" 6 50
     else
         echo "❌ Proxychains test failed!"
         echo "Error: $test_result"
-        dialog --title "Error" --msgbox "Proxychains test failed!\n\nError: $test_result\n\nPlease check your proxy configuration." 10 60
+        dialog --title "Error" --msgbox "Proxychains test failed!\n\nPlease check your proxy configuration." 7 50
+    fi
+}
+
+# Function to configure proxy settings interactively
+configure_proxy_settings() {
+    dialog --title "Proxy Configuration Setup" \
+    --msgbox "Welcome to QProxy Configuration!\n\nThis will help you set up your proxy settings easily.\n\nYou can configure:\n- HTTP Proxy\n- SOCKS5 Proxy\n- Both (for redundancy)\n\nLet's start!" 10 50
+    
+    # Ask for HTTP Proxy
+    dialog --title "HTTP Proxy Configuration" \
+    --yesno "Do you want to configure an HTTP Proxy?\n\nHTTP proxies are good for web browsing and most applications." 8 50
+    
+    if [ $? -eq 0 ]; then
+        # Get HTTP Proxy details
+        dialog --title "HTTP Proxy Settings" \
+        --form "Enter your HTTP Proxy details:" 12 50 0 \
+        "HTTP Proxy Host/IP:" 1 1 "$HTTP_HOST" 1 25 20 0 \
+        "HTTP Proxy Port:" 2 1 "$HTTP_PORT" 2 25 10 0 2>tempfile
+        
+        if [ $? -eq 0 ]; then
+            read -r new_http_host new_http_port < tempfile
+            if [ -n "$new_http_host" ] && [ -n "$new_http_port" ]; then
+                HTTP_HOST="$new_http_host"
+                HTTP_PORT="$new_http_port"
+                dialog --title "Success" --msgbox "HTTP Proxy configured:\nHost: $HTTP_HOST\nPort: $HTTP_PORT" 6 50
+            fi
+        fi
+    fi
+    
+    # Ask for SOCKS5 Proxy
+    dialog --title "SOCKS5 Proxy Configuration" \
+    --yesno "Do you want to configure a SOCKS5 Proxy?\n\nSOCKS5 proxies support more protocols and are more versatile." 8 50
+    
+    if [ $? -eq 0 ]; then
+        # Get SOCKS5 Proxy details
+        dialog --title "SOCKS5 Proxy Settings" \
+        --form "Enter your SOCKS5 Proxy details:" 12 50 0 \
+        "SOCKS5 Proxy Host/IP:" 1 1 "$SOCKS5_HOST" 1 25 20 0 \
+        "SOCKS5 Proxy Port:" 2 1 "$SOCKS5_PORT" 2 25 10 0 2>tempfile
+        
+        if [ $? -eq 0 ]; then
+            read -r new_socks5_host new_socks5_port < tempfile
+            if [ -n "$new_socks5_host" ] && [ -n "$new_socks5_port" ]; then
+                SOCKS5_HOST="$new_socks5_host"
+                SOCKS5_PORT="$new_socks5_port"
+                dialog --title "Success" --msgbox "SOCKS5 Proxy configured:\nHost: $SOCKS5_HOST\nPort: $SOCKS5_PORT" 6 50
+            fi
+        fi
+    fi
+    
+    # Ask if user wants to save configuration
+    dialog --title "Save Configuration" \
+    --yesno "Do you want to save these proxy settings to the script?\n\nThis will update the default values in qproxy.sh" 8 50
+    
+    if [ $? -eq 0 ]; then
+        save_proxy_configuration
+    fi
+    
+    # Show current configuration
+    show_current_configuration
+}
+
+# Function to save proxy configuration to script
+save_proxy_configuration() {
+    # Create backup of original script
+    cp qproxy.sh qproxy.sh.backup.$(date +%Y%m%d_%H%M%S)
+    
+    # Update the script with new values
+    sed -i "s/^HTTP_HOST=.*/HTTP_HOST=\"$HTTP_HOST\"/" qproxy.sh
+    sed -i "s/^HTTP_PORT=.*/HTTP_PORT=\"$HTTP_PORT\"/" qproxy.sh
+    sed -i "s/^SOCKS5_HOST=.*/SOCKS5_HOST=\"$SOCKS5_HOST\"/" qproxy.sh
+    sed -i "s/^SOCKS5_PORT=.*/SOCKS5_PORT=\"$SOCKS5_PORT\"/" qproxy.sh
+    
+    dialog --title "Success" --msgbox "Proxy configuration saved successfully!\n\nBackup created: qproxy.sh.backup.$(date +%Y%m%d_%H%M%S)\n\nYour settings are now the default values." 8 50
+}
+
+# Function to show current configuration
+show_current_configuration() {
+    dialog --title "Current Proxy Configuration" \
+    --msgbox "Current Proxy Settings:\n\nHTTP Proxy:\n  Host: $HTTP_HOST\n  Port: $HTTP_PORT\n\nSOCKS5 Proxy:\n  Host: $SOCKS5_HOST\n  Port: $SOCKS5_PORT\n\nNO_PROXY Hosts:\n  $NO_PROXY_HOSTS" 12 50
+}
+
+# Function to test current proxy configuration
+test_current_proxy_config() {
+    dialog --title "Testing Proxy Configuration" --infobox "Testing your current proxy settings..." 4 50
+    
+    local test_results=""
+    local has_working_proxy=false
+    
+    # Test HTTP Proxy if configured
+    if [ "$HTTP_HOST" != "10.X.X.X" ] && [ "$HTTP_PORT" != "3128" ]; then
+        if check_proxy_health "http://$HTTP_HOST:$HTTP_PORT"; then
+            test_results="$test_results\n✅ HTTP Proxy: WORKING"
+            has_working_proxy=true
+        else
+            test_results="$test_results\n❌ HTTP Proxy: FAILED"
+        fi
+    else
+        test_results="$test_results\n⚪ HTTP Proxy: Not configured"
+    fi
+    
+    # Test SOCKS5 Proxy if configured
+    if [ "$SOCKS5_HOST" != "10.X.X.X" ] && [ "$SOCKS5_PORT" != "1080" ]; then
+        if check_proxy_health "socks5h://$SOCKS5_HOST:$SOCKS5_PORT"; then
+            test_results="$test_results\n✅ SOCKS5 Proxy: WORKING"
+            has_working_proxy=true
+        else
+            test_results="$test_results\n❌ SOCKS5 Proxy: FAILED"
+        fi
+    else
+        test_results="$test_results\n⚪ SOCKS5 Proxy: Not configured"
+    fi
+    
+    if [ "$has_working_proxy" = true ]; then
+        dialog --title "Proxy Test Results" --msgbox "Proxy Test Results:$test_results\n\n🎉 You have working proxy servers!" 10 50
+    else
+        dialog --title "Proxy Test Results" --msgbox "Proxy Test Results:$test_results\n\n⚠️ No working proxies found.\nPlease check your configuration." 10 50
+    fi
+}
+
+# Function to launch proxychains shell with health testing
+launch_proxychains_shell() {
+    # Check if proxychains is installed and offer to install if not
+    if ! check_and_install_proxychains; then
+        return 1
+    fi
+    
+    # Check if configuration file exists
+    if [ ! -f "$PROXYCHAINS_CONF_PATH" ]; then
+        dialog --title "Error" --msgbox "Proxychains configuration file not found!\n\nPlease configure proxychains first." 7 50
+        return 1
+    fi
+    
+    # Test proxy health first
+    dialog --title "Testing Proxy Health" --infobox "Testing proxy server health before launching shell..." 4 50
+    
+    # Test HTTP proxy if configured
+    if grep -q "http.*$HTTP_HOST.*$HTTP_PORT" "$PROXYCHAINS_CONF_PATH" 2>/dev/null; then
+        if ! check_proxy_health "http://$HTTP_HOST:$HTTP_PORT"; then
+            dialog --title "Error" --msgbox "HTTP Proxy health check failed!\n\nCannot launch proxychains shell with unhealthy proxy." 7 50
+            return 1
+        fi
+    fi
+    
+    # Test SOCKS5 proxy if configured
+    if grep -q "socks5.*$SOCKS5_HOST.*$SOCKS5_PORT" "$PROXYCHAINS_CONF_PATH" 2>/dev/null; then
+        if ! check_proxy_health "socks5h://$SOCKS5_HOST:$SOCKS5_PORT"; then
+            dialog --title "Error" --msgbox "SOCKS5 Proxy health check failed!\n\nCannot launch proxychains shell with unhealthy proxy." 7 50
+            return 1
+        fi
+    fi
+    
+    # Test proxychains connectivity
+    dialog --title "Testing Proxychains" --infobox "Testing proxychains connectivity..." 4 50
+    test_result=$(proxychains4 curl -s --connect-timeout 10 --max-time 15 http://httpbin.org/ip 2>&1)
+    
+    if [ $? -eq 0 ] && [[ "$test_result" == *"origin"* ]]; then
+        dialog --title "Success" --msgbox "Proxy health check passed!\n\nLaunching proxychains shell..." 6 50
+        
+        # Clear screen and show info
+        clear
+        echo "=========================================="
+        echo "  🚀 Proxychains Shell Launched"
+        echo "=========================================="
+        echo "✅ Proxy health check: PASSED"
+        echo "✅ Proxychains test: PASSED"
+        echo "🌐 All network traffic will go through proxy"
+        echo "💡 Type 'exit' to return to QProxy"
+        echo "=========================================="
+        echo ""
+        
+        # Launch proxychains shell
+        exec proxychains4 bash
+    else
+        dialog --title "Error" --msgbox "Proxychains test failed!\n\nCannot launch shell with non-functional proxy." 7 50
+        return 1
     fi
 }
 
@@ -731,16 +1208,16 @@ test_os_env_proxy() {
     if [[ $HTTP_PROXY == "http://$HTTP_HOST:$HTTP_PORT" ]] || [[ $HTTPS_PROXY == "http://$HTTP_HOST:$HTTP_PORT" ]]; then
         check_proxy_server_location $HTTP_PROXY
         if [ "$server_country" != "Iran" ]; then
-            dialog --title "Success" --msgbox "The HTTP proxy setting is configured correctly, the proxy server location is $server_country." 7 50
+            dialog --title "Success" --msgbox "HTTP Proxy test successful!\n\nServer location: $server_country" 7 50
         else
-            dialog --title "Error" --msgbox "The HTTP proxy setting is not configured correctly or not working!" 6 50
+            dialog --title "Error" --msgbox "HTTP Proxy test failed!" 6 50
             fi
     elif [[ $HTTP_PROXY == "socks5h://$SOCKS5_HOST:$SOCKS5_PORT" ]] || [[ $HTTPS_PROXY == "socks5h://$SOCKS5_HOST:$SOCKS5_PORT" ]]; then
         check_proxy_server_location $HTTP_PROXY
         if [ "$server_country" != "Iran" ]; then
-            dialog --title "Success" --msgbox "The SOCKS5 proxy setting is configured correctly, the proxy server location is $server_country." 7 50
+            dialog --title "Success" --msgbox "SOCKS5 Proxy test successful!\n\nServer location: $server_country" 7 50
         else
-            dialog --title "Error" --msgbox "The SOCKS5 proxy setting is not configured correctly or not working!" 6 50
+            dialog --title "Error" --msgbox "SOCKS5 Proxy test failed!" 6 50
             fi
     else
         dialog --title "Info" --msgbox "No matching proxy configuration found." 6 50
@@ -752,13 +1229,72 @@ test_apt_proxy() {
     # Check if apt is installed
     if ! command -v apt &> /dev/null
     then
-        dialog --title "Error" --msgbox "apt could not be found. are you Debian-based?" 6 50
+        dialog --title "Error" --msgbox "APT package manager not found!" 6 50
     fi    
     apt clean && apt autoclean >/dev/null 2>&1 && apt update -qq >/dev/null 2>&1
     if [ $? == 0 ]; then
-        dialog --title "Success" --msgbox "If you enabled the proxy setting on APT, It's working." 7 50
+        dialog --title "Success" --msgbox "APT Proxy test successful!" 6 50
     else
-        dialog --title "Error" --msgbox "The proxy setting on APT is not configured correctly or not working!" 6 50
+        dialog --title "Error" --msgbox "APT Proxy test failed!" 6 50
+    fi
+}
+
+# Function to test the DNF/YUM Proxy setting
+test_dnf_proxy() {
+    # Check if dnf or yum is installed
+    if ! command -v dnf &> /dev/null && ! command -v yum &> /dev/null
+    then
+        dialog --title "Error" --msgbox "DNF/YUM package manager not found!" 6 50
+        return 1
+    fi
+    
+    # Test with dnf if available, otherwise yum
+    if command -v dnf &> /dev/null; then
+        dnf clean all >/dev/null 2>&1 && dnf check-update >/dev/null 2>&1
+    else
+        yum clean all >/dev/null 2>&1 && yum check-update >/dev/null 2>&1
+    fi
+    
+    if [ $? == 0 ]; then
+        dialog --title "Success" --msgbox "DNF/YUM Proxy test successful!" 6 50
+    else
+        dialog --title "Error" --msgbox "DNF/YUM Proxy test failed!" 6 50
+    fi
+}
+
+# Function to test the Pacman Proxy setting
+test_pacman_proxy() {
+    # Check if pacman is installed
+    if ! command -v pacman &> /dev/null
+    then
+        dialog --title "Error" --msgbox "Pacman package manager not found!" 6 50
+        return 1
+    fi
+    
+    # Test pacman with proxy
+    pacman -Sy >/dev/null 2>&1
+    if [ $? == 0 ]; then
+        dialog --title "Success" --msgbox "Pacman Proxy test successful!" 6 50
+    else
+        dialog --title "Error" --msgbox "Pacman Proxy test failed!" 6 50
+    fi
+}
+
+# Function to test the Zypper Proxy setting
+test_zypper_proxy() {
+    # Check if zypper is installed
+    if ! command -v zypper &> /dev/null
+    then
+        dialog --title "Error" --msgbox "Zypper package manager not found!" 6 50
+        return 1
+    fi
+    
+    # Test zypper with proxy
+    zypper refresh >/dev/null 2>&1
+    if [ $? == 0 ]; then
+        dialog --title "Success" --msgbox "Zypper Proxy test successful!" 6 50
+    else
+        dialog --title "Error" --msgbox "Zypper Proxy test failed!" 6 50
     fi
 }
 
@@ -779,9 +1315,9 @@ test_docker_proxy() {
     # If both checks pass, run the Docker command
     docker search nginx >/dev/null 2>&1
     if [ $? == 0 ]; then
-        dialog --title "Success" --msgbox "The proxy setting on Docker is configured correctly." 7 50
+        dialog --title "Success" --msgbox "Docker Proxy test successful!" 6 50
     else
-        dialog --title "Error" --msgbox "The proxy setting on Docker is not configured correctly or not working!" 6 50
+        dialog --title "Error" --msgbox "Docker Proxy test failed!" 6 50
     fi
 }
 
@@ -803,26 +1339,28 @@ test_containerd_proxy() {
     # If both checks pass, run the containerd command
     ctr images pull docker.io/library/alpine:latest >/dev/null 2>&1
     if [ $? == 0 ]; then
-        dialog --title "Success" --msgbox "The proxy setting on containerd is configured correctly." 7 50
+        dialog --title "Success" --msgbox "Containerd Proxy test successful!" 6 50
     else
-        dialog --title "Error" --msgbox "The proxy setting on containerd is not configured correctly or not working!" 6 50
+        dialog --title "Error" --msgbox "Containerd Proxy test failed!" 6 50
     fi
 }
 
 
+# Main function - only run when script is executed directly
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
 # Call the check dependencies function
 check_deps
-
-# Main function
 while true; do
     dialog --title "Manage the proxy configs on Linux and services quickly" \
     --backtitle "$SCRIPT_NAME" \
-    --menu "Choose the action you want to perform (with space or mouse click):" 14 70 8 \
-    1 "Enable Proxy" \
-    2 "Disable Proxy" \
-    3 "Test Proxies" \
-    4 "Configure Proxychains" \
-    5 "Exit" 2>tempfile
+    --menu "Choose the action you want to perform (with space or mouse click):" 14 70 10 \
+    1 "Configure Proxy Settings" \
+    2 "Enable Proxy" \
+    3 "Disable Proxy" \
+    4 "Test Proxies" \
+    5 "Configure Proxychains" \
+    6 "Apply Proxy to Current Session" \
+    7 "Exit" 2>tempfile
 
     # Read the selection
     selection=$(<tempfile)
@@ -830,12 +1368,39 @@ while true; do
     # Check the user's selection
     case $selection in
         1)
+            dialog --title "Proxy Configuration" \
+            --menu "Choose configuration option:" 10 50 4 \
+            1 "Configure Proxy Settings" \
+            2 "Show Current Configuration" \
+            3 "Test Current Configuration" \
+            4 "Back to Main Menu" 2>tempfile
+
+            # Read the selection
+            config_selection=$(<tempfile)
+
+            # Check the user's selection
+            case $config_selection in
+                1)
+                    configure_proxy_settings
+                    ;;
+                2)
+                    show_current_configuration
+                    ;;
+                3)
+                    test_current_proxy_config
+                    ;;
+                4)
+                    continue
+                    ;;
+            esac
+            ;;
+        2)
             dialog --title "Enable Proxy" \
-            --checklist "Where you want to set the HTTP/SOCKS5 Proxy:" 14 70 7 \
+            --checklist "Where you want to set the HTTP/SOCKS5 Proxy:" 14 70 8 \
             1 "Enable HTTP Proxy on OS ENV" off \
             2 "Enable SOCKS5 Proxy on OS ENV" off \
-            3 "Enable HTTP Proxy on APT (recommended)" off \
-            4 "Enable SOCKS5 Proxy on APT" off \
+            3 "Enable HTTP Proxy on Package Manager (Auto-detect)" off \
+            4 "Enable SOCKS5 Proxy on APT (Debian/Ubuntu only)" off \
             5 "Enable HTTP Proxy on Docker Service" off \
             6 "Enable HTTP Proxy on Containerd (K8s) Service" off 2>tempfile
 
@@ -853,7 +1418,7 @@ while true; do
                         set_os_env_socks5_proxy
                         ;;
                     3)
-                        set_apt_http_proxy
+                        set_auto_package_manager_proxy
                         ;;
                     4)
                         set_apt_socks5_proxy
@@ -867,14 +1432,15 @@ while true; do
                 esac
             done
             ;;
-        2)
+        3)
             dialog --title "Disable Proxy" \
-            --checklist "Choose the action you want to perform (with space or mouse click):" 14 70 5 \
+            --checklist "Choose the action you want to perform (with space or mouse click):" 14 70 6 \
             1 "Disable HTTP/SOCKS5 Proxy on OS ENV" off \
-            2 "Disable HTTP/SOCKS5 Proxy on APT" off \
-            3 "Disable HTTP/SOCKS5 Proxy on Docker Service" off \
-            4 "Disable HTTP/SOCKS5 Proxy on Containerd (K8s) Service" off \
-            5 "Disable HTTP/SOCKS5 Completely" off 2>tempfile
+            2 "Disable HTTP Proxy on Package Manager (Auto-detect)" off \
+            3 "Disable HTTP/SOCKS5 Proxy on APT" off \
+            4 "Disable HTTP/SOCKS5 Proxy on Docker Service" off \
+            5 "Disable HTTP/SOCKS5 Proxy on Containerd (K8s) Service" off \
+            6 "Disable HTTP/SOCKS5 Completely" off 2>tempfile
 
             # Read the selections
             selections=$(<tempfile)
@@ -887,31 +1453,35 @@ while true; do
                         disable_os_env_proxy
                         ;;
                     2)
-                        remove_old_apt_proxy
+                        remove_auto_package_manager_proxy
                         ;;  
                     3)
-                        disable_docker_proxy
+                        remove_old_apt_proxy
                         ;;
                     4)
-                        disable_containerd_proxy
+                        disable_docker_proxy
                         ;;
                     5)
+                        disable_containerd_proxy
+                        ;;
+                    6)
                         disable_os_env_proxy
-                        remove_old_apt_proxy
+                        remove_auto_package_manager_proxy
                         disable_docker_proxy
                         disable_containerd_proxy
                         ;;
                 esac
             done
             ;;
-        3)
+        4)
             dialog --title "Test Proxies" \
-            --menu "Choose the action you want to test:" 14 70 8 \
+            --menu "Choose the action you want to test:" 14 70 9 \
             1 "Test OS Proxy" \
             2 "Test Docker Proxy" \
-            3 "Test APT Proxy (Enable the proxy first)" \
-            4 "Test Proxy Performance" \
-            5 "Test Proxy Health" 2>tempfile
+            3 "Test Package Manager Proxy (Auto-detect)" \
+            4 "Test APT Proxy (Debian/Ubuntu only)" \
+            5 "Test Proxy Performance" \
+            6 "Test Proxy Health" 2>tempfile
 
             # Read the selection
             test_selection=$(<tempfile)
@@ -925,9 +1495,12 @@ while true; do
                     test_docker_proxy
                     ;;
                 3)
-                    test_apt_proxy
+                    test_auto_package_manager_proxy
                     ;;
                 4)
+                    test_apt_proxy
+                    ;;
+                5)
                     dialog --title "Proxy Performance Test" \
                     --menu "Choose proxy to test:" 10 50 3 \
                     1 "HTTP Proxy Performance" \
@@ -939,10 +1512,10 @@ while true; do
                             ;;
                         2)
                             test_proxy_performance "socks5h://$SOCKS5_HOST:$SOCKS5_PORT" | dialog --title "SOCKS5 Proxy Performance" --programbox 20 80
-                            ;;
-                    esac
                     ;;
-                5)
+            esac
+            ;;
+                6)
                     dialog --title "Proxy Health Test" \
                     --menu "Choose proxy to test:" 10 50 3 \
                     1 "HTTP Proxy Health" \
@@ -951,23 +1524,23 @@ while true; do
                     case $health_selection in
                         1)
                             if check_proxy_health "http://$HTTP_HOST:$HTTP_PORT"; then
-                                dialog --title "Success" --msgbox "HTTP Proxy is healthy and responding correctly." 6 50
+                                dialog --title "Success" --msgbox "HTTP Proxy health check passed!" 6 50
                             else
-                                dialog --title "Error" --msgbox "HTTP Proxy health check failed. Check your proxy configuration." 6 50
+                                dialog --title "Error" --msgbox "HTTP Proxy health check failed!" 6 50
                             fi
                             ;;
                         2)
                             if check_proxy_health "socks5h://$SOCKS5_HOST:$SOCKS5_PORT"; then
-                                dialog --title "Success" --msgbox "SOCKS5 Proxy is healthy and responding correctly." 6 50
+                                dialog --title "Success" --msgbox "SOCKS5 Proxy health check passed!" 6 50
                             else
-                                dialog --title "Error" --msgbox "SOCKS5 Proxy health check failed. Check your proxy configuration." 6 50
+                                dialog --title "Error" --msgbox "SOCKS5 Proxy health check failed!" 6 50
                             fi
                             ;;
                     esac
                     ;;
             esac
             ;;
-        4)
+        5)
             # Check if proxychains is available before showing menu
             if ! command -v proxychains4 &> /dev/null; then
                 dialog --title "Proxychains4 Not Available" \
@@ -984,12 +1557,13 @@ while true; do
             fi
             
             dialog --title "Configure Proxychains" \
-            --menu "Choose the proxychains configuration:" 14 70 6 \
+            --menu "Choose the proxychains configuration:" 14 70 7 \
             1 "Configure HTTP Proxy in Proxychains" \
             2 "Configure SOCKS5 Proxy in Proxychains" \
             3 "Configure Dual Proxy (HTTP + SOCKS5)" \
             4 "Disable Proxychains Configuration" \
-            5 "Test Proxychains Configuration" 2>tempfile
+            5 "Test Proxychains Configuration" \
+            6 "Launch Proxychains Shell" 2>tempfile
 
             # Read the selection
             proxychains_selection=$(<tempfile)
@@ -1011,9 +1585,38 @@ while true; do
                 5)
                     test_proxychains_config
                     ;;
+                6)
+                    launch_proxychains_shell
+                    ;;
             esac
             ;;
-        5)
+        6)
+            dialog --title "Apply Proxy to Current Session" \
+            --menu "Choose proxy type to apply to current session:" 10 50 3 \
+            1 "Apply HTTP Proxy to Current Session" \
+            2 "Apply SOCKS5 Proxy to Current Session" \
+            3 "Remove Proxy from Current Session" 2>tempfile
+
+            # Read the selection
+            session_selection=$(<tempfile)
+
+            # Check the user's selection
+            case $session_selection in
+                1)
+                    apply_proxy_to_current_session
+                    dialog --title "Success" --msgbox "HTTP Proxy applied to current session!\n\nThis is temporary and will not persist after reboot." 7 50
+                    ;;
+                2)
+                    apply_socks5_proxy_to_current_session
+                    dialog --title "Success" --msgbox "SOCKS5 Proxy applied to current session!\n\nThis is temporary and will not persist after reboot." 7 50
+                    ;;
+                3)
+                    remove_proxy_from_current_session
+                    dialog --title "Success" --msgbox "Proxy removed from current session!\n\nThis only affects the current session." 7 50
+                    ;;
+            esac
+            ;;
+        7)
             echo "Exiting..."
             break
             ;;
@@ -1026,3 +1629,4 @@ clear
 
 # Remove the tempfile
 rm -f tempfile
+fi

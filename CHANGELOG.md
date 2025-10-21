@@ -5,7 +5,49 @@ All notable changes to QProxy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.6.0] - 2024-12-19
+## [1.8.0] - 2025-10-21
+
+### Added
+- **Proxychains Shell Launcher**: New feature to launch a shell with proxychains enabled after health testing
+- **Comprehensive Health Testing**: Tests proxy server health before launching proxychains shell
+- **Interactive Shell Environment**: Launches bash shell with all network traffic routed through proxy
+- **Safety Checks**: Prevents launching shell with unhealthy or non-functional proxies
+- **User-Friendly Interface**: Clear status messages and instructions for the proxychains shell
+
+### Enhanced
+- **Proxychains Menu**: Added "Launch Proxychains Shell" option to the proxychains configuration menu
+- **Health Validation**: Multi-layer health testing (proxy health + proxychains connectivity)
+- **Error Handling**: Comprehensive error messages for failed health checks
+- **User Experience**: Clear visual feedback and instructions when launching proxychains shell
+
+### Technical Improvements
+- **Health Testing Integration**: Uses existing health check functions for proxy validation
+- **Configuration Validation**: Checks proxychains configuration file existence before launching
+- **Process Management**: Uses `exec` to replace current process with proxychains shell
+- **Status Display**: Clear terminal output showing proxy status and usage instructions
+
+## [1.7.0] - 2025-10-21
+
+### Added
+- **Current Session Proxy Management**: New functions to apply proxy settings to current user session without requiring logout/login
+- **Multi-Shell Support**: Automatically applies proxy settings to all existing user shells (bash, zsh, sh, fish)
+- **Session-Only Proxy Application**: New menu option "Apply Proxy to Current Session" for temporary proxy configuration
+- **Immediate Proxy Application**: Proxy settings are now applied immediately to current session when enabling/disabling
+- **Enhanced User Experience**: No more need to logout/login to apply proxy changes
+
+### Changed
+- **Proxy Application Process**: All proxy enable/disable functions now apply changes immediately to current session
+- **Success Messages**: Updated to show that proxy is applied immediately without requiring logout
+- **Menu Structure**: Added new menu option for current session proxy management
+- **User Feedback**: Enhanced success messages to clearly indicate immediate application vs persistent configuration
+
+### Technical Improvements
+- **Process Management**: Added functions to detect and manage user shell processes
+- **Environment Variable Management**: Enhanced export/unset operations for all user shells
+- **Session Persistence**: Clear distinction between temporary session changes and persistent configuration
+- **Error Handling**: Improved error handling for shell process management
+
+## [1.6.0] - 2025-10-21
 
 ### Added
 - **Multi-Distribution Support**
@@ -47,7 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Pacman**: Arch Linux, Manjaro, EndeavourOS
   - **Zypper**: OpenSUSE, SUSE Linux Enterprise Server
 
-## [1.5.0] - 2024-12-19
+## [1.5.0] - 2025-10-21
 
 ### Added
 - **Automatic Proxychains Installation**
@@ -76,7 +118,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Clear error messages for installation failures
   - Manual installation instructions as fallback
 
-## [1.4.0] - 2024-12-19
+## [1.4.0] - 2025-10-21
 
 ### Added
 - **Proxychains Integration**

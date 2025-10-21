@@ -1,6 +1,6 @@
 # QProxy - Linux Proxy Management Tool
 
-**Version:** v1.6  
+**Version:** v1.9  
 **Author:** Hamid Naeemabadi  
 **Purpose:** Manage proxy configurations on Linux systems and services quickly and efficiently.
 
@@ -18,6 +18,7 @@
 - **Docker Service**: Container runtime proxy configuration with performance optimizations
 - **Containerd (Kubernetes)**: Container runtime proxy support for K8s environments
 - **Proxychains Integration**: Automatic proxychains.conf configuration and management
+- **Current Session Management**: Apply proxy settings immediately without logout/login (NEW in v1.7)
 
 ### Performance Optimizations
 - **Connection Timeouts**: Configurable timeout settings for better reliability
@@ -37,6 +38,7 @@
 - **Safe Service Restarts**: Docker live-restore support to prevent container downtime
 - **Configuration Backup**: Automatic backup of existing configurations
 - **Error Handling**: Comprehensive error checking and user feedback
+- **Multi-Shell Support**: Automatically applies proxy settings to all user shells (bash, zsh, sh, fish)
 - **Proxychains Security**: DNS leak protection and optimized chain configurations
 
 ## 📋 Requirements
@@ -129,9 +131,81 @@ PROXY_READ_TIMEOUT=60
    - Configure Dual Proxy (HTTP + SOCKS5)
    - Disable Proxychains Configuration
    - Test Proxychains Configuration
+   - **Launch Proxychains Shell** ⭐ **NEW in v1.8**
    - **Auto-installation**: Automatically installs proxychains4 if not present
 
-5. **Exit**
+5. **Apply Proxy to Current Session** ⭐ **NEW in v1.7**
+   - Apply HTTP Proxy to Current Session (temporary)
+   - Apply SOCKS5 Proxy to Current Session (temporary)
+   - Remove Proxy from Current Session
+   - **Multi-Shell Support**: Applies to all user shells (bash, zsh, sh, fish)
+   - **No Logout Required**: Immediate application without system restart
+
+6. **Exit**
+
+### Interactive Proxy Configuration ⭐ **NEW in v1.9**
+
+QProxy now includes an easy-to-use interactive configuration system:
+
+#### **Guided Setup Wizard**
+- **Step-by-Step Configuration**: Walk through proxy setup with clear instructions
+- **Form-Based Input**: Easy-to-use forms for entering proxy details
+- **Multiple Proxy Support**: Configure HTTP, SOCKS5, or both proxies
+- **Validation**: Automatic validation of proxy settings before saving
+
+#### **Configuration Management**
+- **Save Configuration**: Permanently save your proxy settings to the script
+- **Automatic Backup**: Creates timestamped backup before saving changes
+- **View Current Settings**: Display current proxy configuration at any time
+- **Test Configuration**: Test your proxy settings before using them
+
+#### **User-Friendly Features**
+- **No Manual Editing**: No need to edit script files manually
+- **Clear Instructions**: Helpful explanations for each proxy type
+- **Error Prevention**: Validates input and prevents invalid configurations
+- **Easy Access**: Available as the first menu option for quick setup
+
+### Proxychains Shell Launcher ⭐ **NEW in v1.8**
+
+QProxy now includes a powerful feature to launch a shell with proxychains enabled:
+
+#### **Health-Tested Shell Launch**
+- **Pre-Launch Testing**: Tests proxy server health before launching shell
+- **Comprehensive Validation**: Validates both proxy health and proxychains connectivity
+- **Safe Launch**: Only launches shell with confirmed working proxy configuration
+- **Interactive Environment**: Provides bash shell with all traffic routed through proxy
+
+#### **Safety Features**
+- **Health Check Integration**: Uses existing health check functions for validation
+- **Configuration Validation**: Ensures proxychains configuration exists before launch
+- **Error Prevention**: Prevents launching shell with unhealthy or non-functional proxies
+- **Clear Feedback**: Shows detailed status messages and instructions
+
+#### **Usage**
+- **Menu Access**: Available in "Configure Proxychains" → "Launch Proxychains Shell"
+- **Automatic Testing**: Runs health checks automatically before shell launch
+- **Easy Exit**: Type `exit` to return to QProxy menu
+- **Visual Status**: Clear terminal output showing proxy status and usage instructions
+
+### Current Session Management ⭐ **NEW in v1.7**
+
+QProxy now supports immediate proxy application without requiring logout/login:
+
+#### **Immediate Application**
+- **No Logout Required**: Proxy settings are applied immediately to current session
+- **Multi-Shell Support**: Automatically applies to all existing user shells (bash, zsh, sh, fish)
+- **Process Management**: Detects and manages user shell processes for environment variable injection
+
+#### **Session Types**
+- **Persistent Configuration**: Use "Enable Proxy" for permanent settings that survive reboots
+- **Temporary Session**: Use "Apply Proxy to Current Session" for temporary settings that don't persist
+- **Immediate Removal**: Use "Remove Proxy from Current Session" to quickly disable proxy
+
+#### **Technical Implementation**
+- **Environment Variable Injection**: Direct export/unset operations to shell processes
+- **Process Detection**: Automatic detection of user shell processes via `/proc` filesystem
+- **Error Handling**: Graceful handling of process management errors
+- **User Feedback**: Clear distinction between temporary and persistent configurations
 
 ### Performance Testing
 
