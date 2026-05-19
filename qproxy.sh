@@ -10,23 +10,27 @@ VERSION="v1.9"
 
 SCRIPT_NAME="QProxy for Linux $VERSION by Hamid Naeemabadi"
 
-# SOCKS5 Proxy
-SOCKS5_HOST="10.X.X.X"
-SOCKS5_PORT="1080"
+# Default proxy values (seed ~/.qproxy.env when missing)
+DEFAULT_SOCKS5_HOST="10.X.X.X"
+DEFAULT_SOCKS5_PORT="1080"
+DEFAULT_HTTP_HOST="10.X.X.X"
+DEFAULT_HTTP_PORT="3128"
+DEFAULT_NO_PROXY_HOSTS="127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,example.local,localhost,*.local"
+DEFAULT_PROXY_TIMEOUT=30
+DEFAULT_PROXY_READ_TIMEOUT=60
 
-# HTTP Proxy
-HTTP_HOST="10.X.X.X"
-HTTP_PORT="3128"
-
-# Exclude the Private IP subnets and local ORG domain
-NO_PROXY_HOSTS="127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,example.local,localhost,*.local"
-
-# Performance and timeout settings
-PROXY_TIMEOUT=30
-PROXY_READ_TIMEOUT=60
+# Runtime proxy settings (loaded from ~/.qproxy.env on startup)
+SOCKS5_HOST="$DEFAULT_SOCKS5_HOST"
+SOCKS5_PORT="$DEFAULT_SOCKS5_PORT"
+HTTP_HOST="$DEFAULT_HTTP_HOST"
+HTTP_PORT="$DEFAULT_HTTP_PORT"
+NO_PROXY_HOSTS="$DEFAULT_NO_PROXY_HOSTS"
+PROXY_TIMEOUT="$DEFAULT_PROXY_TIMEOUT"
+PROXY_READ_TIMEOUT="$DEFAULT_PROXY_READ_TIMEOUT"
 
 USER_PROXY_ENV_PATH="/etc/profile.d/user_proxy_env.sh"
 PROXYCHAINS_CONF_PATH="/etc/proxychains4.conf"
+QPROXY_ENV_FILE=""
 
 # Function to install dependencies if wasn't installed
 check_deps() {
@@ -74,6 +78,98 @@ check_deps() {
             exit 1
             ;;
     esac
+}
+
+# Resolve the invoking user (supports sudo)
+get_qproxy_user() {
+    if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+        echo "$SUDO_USER"
+    else
+        echo "${USER:-root}"
+    fi
+}
+
+get_qproxy_user_home() {
+    local quser qhome
+    quser=$(get_qproxy_user)
+    if [ "$quser" = "root" ]; then
+        echo "${HOME:-/root}"
+    else
+        qhome=$(getent passwd "$quser" 2>/dev/null | cut -d: -f6)
+        if [ -n "$qhome" ]; then
+            echo "$qhome"
+        else
+            echo "${HOME:-/root}"
+        fi
+    fi
+}
+
+resolve_qproxy_env_file() {
+    QPROXY_ENV_FILE="$(get_qproxy_user_home)/.qproxy.env"
+}
+
+# Load proxy host/port settings from the user env file
+load_qproxy_env_file() {
+    local env_file="$1"
+    local line key value
+    [ -f "$env_file" ] || return 1
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="${line%%#*}"
+        line="${line%"${line##*[![:space:]]}"}"
+        line="${line#"${line%%[![:space:]]*}"}"
+        [ -z "$line" ] && continue
+        [[ "$line" != *=* ]] && continue
+        key="${line%%=*}"
+        value="${line#*=}"
+        key="${key%"${key##*[![:space:]]}"}"
+        key="${key#"${key%%[![:space:]]*}"}"
+        value="${value%"${value##*[![:space:]]}"}"
+        value="${value#"${value%%[![:space:]]*}"}"
+        value="${value%\"}"
+        value="${value#\"}"
+        value="${value%\'}"
+        value="${value#\'}"
+        case "$key" in
+            HTTP_HOST|HTTP_PORT|SOCKS5_HOST|SOCKS5_PORT|NO_PROXY_HOSTS|PROXY_TIMEOUT|PROXY_READ_TIMEOUT)
+                eval "$key=\"\$value\""
+                ;;
+        esac
+    done < "$env_file"
+    return 0
+}
+
+save_qproxy_env_file() {
+    local env_file="${1:-$QPROXY_ENV_FILE}"
+    local qhome quser
+    [ -n "$env_file" ] || return 1
+    qhome=$(dirname "$env_file")
+    quser=$(get_qproxy_user)
+    mkdir -p "$qhome" 2>/dev/null || true
+    cat > "$env_file" <<EOF
+# QProxy user configuration - managed by qproxy.sh
+# Edit HTTP/SOCKS5 host and port here; changes apply on the next script run.
+HTTP_HOST="$HTTP_HOST"
+HTTP_PORT="$HTTP_PORT"
+SOCKS5_HOST="$SOCKS5_HOST"
+SOCKS5_PORT="$SOCKS5_PORT"
+NO_PROXY_HOSTS="$NO_PROXY_HOSTS"
+PROXY_TIMEOUT="$PROXY_TIMEOUT"
+PROXY_READ_TIMEOUT="$PROXY_READ_TIMEOUT"
+EOF
+    chmod 600 "$env_file" 2>/dev/null || true
+    if [ "$(id -u)" -eq 0 ] && [ "$quser" != "root" ]; then
+        chown "$quser:$quser" "$env_file" 2>/dev/null || true
+    fi
+}
+
+# Read ~/.qproxy.env on startup; create it from defaults if missing
+init_qproxy_config() {
+    resolve_qproxy_env_file
+    if [ -f "$QPROXY_ENV_FILE" ]; then
+        load_qproxy_env_file "$QPROXY_ENV_FILE"
+    else
+        save_qproxy_env_file "$QPROXY_ENV_FILE"
+    fi
 }
 
 # Function to detect Linux distribution
@@ -1028,6 +1124,7 @@ test_proxychains_config() {
 
 # Function to configure proxy settings interactively
 configure_proxy_settings() {
+    init_qproxy_config
     dialog --title "Proxy Configuration Setup" \
     --msgbox "Welcome to QProxy Configuration!\n\nThis will help you set up your proxy settings easily.\n\nYou can configure:\n- HTTP Proxy\n- SOCKS5 Proxy\n- Both (for redundancy)\n\nLet's start!" 10 50
     
@@ -1047,7 +1144,8 @@ configure_proxy_settings() {
             if [ -n "$new_http_host" ] && [ -n "$new_http_port" ]; then
                 HTTP_HOST="$new_http_host"
                 HTTP_PORT="$new_http_port"
-                dialog --title "Success" --msgbox "HTTP Proxy configured:\nHost: $HTTP_HOST\nPort: $HTTP_PORT" 6 50
+                save_qproxy_env_file
+                dialog --title "Success" --msgbox "HTTP Proxy configured and saved:\nHost: $HTTP_HOST\nPort: $HTTP_PORT\n\nConfig file:\n$QPROXY_ENV_FILE" 9 60
             fi
         fi
     fi
@@ -1068,41 +1166,27 @@ configure_proxy_settings() {
             if [ -n "$new_socks5_host" ] && [ -n "$new_socks5_port" ]; then
                 SOCKS5_HOST="$new_socks5_host"
                 SOCKS5_PORT="$new_socks5_port"
-                dialog --title "Success" --msgbox "SOCKS5 Proxy configured:\nHost: $SOCKS5_HOST\nPort: $SOCKS5_PORT" 6 50
+                save_qproxy_env_file
+                dialog --title "Success" --msgbox "SOCKS5 Proxy configured and saved:\nHost: $SOCKS5_HOST\nPort: $SOCKS5_PORT\n\nConfig file:\n$QPROXY_ENV_FILE" 9 60
             fi
         fi
-    fi
-    
-    # Ask if user wants to save configuration
-    dialog --title "Save Configuration" \
-    --yesno "Do you want to save these proxy settings to the script?\n\nThis will update the default values in qproxy.sh" 8 50
-    
-    if [ $? -eq 0 ]; then
-        save_proxy_configuration
     fi
     
     # Show current configuration
     show_current_configuration
 }
 
-# Function to save proxy configuration to script
+# Function to save proxy configuration to the user env file
 save_proxy_configuration() {
-    # Create backup of original script
-    cp qproxy.sh qproxy.sh.backup.$(date +%Y%m%d_%H%M%S)
-    
-    # Update the script with new values
-    sed -i "s/^HTTP_HOST=.*/HTTP_HOST=\"$HTTP_HOST\"/" qproxy.sh
-    sed -i "s/^HTTP_PORT=.*/HTTP_PORT=\"$HTTP_PORT\"/" qproxy.sh
-    sed -i "s/^SOCKS5_HOST=.*/SOCKS5_HOST=\"$SOCKS5_HOST\"/" qproxy.sh
-    sed -i "s/^SOCKS5_PORT=.*/SOCKS5_PORT=\"$SOCKS5_PORT\"/" qproxy.sh
-    
-    dialog --title "Success" --msgbox "Proxy configuration saved successfully!\n\nBackup created: qproxy.sh.backup.$(date +%Y%m%d_%H%M%S)\n\nYour settings are now the default values." 8 50
+    save_qproxy_env_file
+    dialog --title "Success" --msgbox "Proxy configuration saved to:\n$QPROXY_ENV_FILE\n\nAll proxy actions will use these values." 8 60
 }
 
 # Function to show current configuration
 show_current_configuration() {
+    resolve_qproxy_env_file
     dialog --title "Current Proxy Configuration" \
-    --msgbox "Current Proxy Settings:\n\nHTTP Proxy:\n  Host: $HTTP_HOST\n  Port: $HTTP_PORT\n\nSOCKS5 Proxy:\n  Host: $SOCKS5_HOST\n  Port: $SOCKS5_PORT\n\nNO_PROXY Hosts:\n  $NO_PROXY_HOSTS" 12 50
+    --msgbox "Current Proxy Settings:\n\nHTTP Proxy:\n  Host: $HTTP_HOST\n  Port: $HTTP_PORT\n\nSOCKS5 Proxy:\n  Host: $SOCKS5_HOST\n  Port: $SOCKS5_PORT\n\nNO_PROXY Hosts:\n  $NO_PROXY_HOSTS\n\nConfig file:\n  $QPROXY_ENV_FILE" 14 60
 }
 
 # Function to test current proxy configuration
@@ -1113,7 +1197,7 @@ test_current_proxy_config() {
     local has_working_proxy=false
     
     # Test HTTP Proxy if configured
-    if [ "$HTTP_HOST" != "10.X.X.X" ] && [ "$HTTP_PORT" != "3128" ]; then
+    if [ "$HTTP_HOST" != "$DEFAULT_HTTP_HOST" ] || [ "$HTTP_PORT" != "$DEFAULT_HTTP_PORT" ]; then
         if check_proxy_health "http://$HTTP_HOST:$HTTP_PORT"; then
             test_results="$test_results\n✅ HTTP Proxy: WORKING"
             has_working_proxy=true
@@ -1125,7 +1209,7 @@ test_current_proxy_config() {
     fi
     
     # Test SOCKS5 Proxy if configured
-    if [ "$SOCKS5_HOST" != "10.X.X.X" ] && [ "$SOCKS5_PORT" != "1080" ]; then
+    if [ "$SOCKS5_HOST" != "$DEFAULT_SOCKS5_HOST" ] || [ "$SOCKS5_PORT" != "$DEFAULT_SOCKS5_PORT" ]; then
         if check_proxy_health "socks5h://$SOCKS5_HOST:$SOCKS5_PORT"; then
             test_results="$test_results\n✅ SOCKS5 Proxy: WORKING"
             has_working_proxy=true
@@ -1348,6 +1432,7 @@ test_containerd_proxy() {
 
 # Main function - only run when script is executed directly
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+init_qproxy_config
 # Call the check dependencies function
 check_deps
 while true; do
@@ -1384,6 +1469,7 @@ while true; do
                     configure_proxy_settings
                     ;;
                 2)
+                    init_qproxy_config
                     show_current_configuration
                     ;;
                 3)
