@@ -6,7 +6,7 @@
 ########################################################
 
 # Vars
-VERSION="v1.9"
+VERSION="v1.9.2"
 
 SCRIPT_NAME="QProxy for Linux $VERSION by Hamid Naeemabadi"
 
@@ -31,6 +31,7 @@ PROXY_READ_TIMEOUT="$DEFAULT_PROXY_READ_TIMEOUT"
 USER_PROXY_ENV_PATH="/etc/profile.d/user_proxy_env.sh"
 PROXYCHAINS_CONF_PATH="/etc/proxychains4.conf"
 QPROXY_ENV_FILE=""
+QPROXY_SESSION_ENV_FILE=""
 
 # Function to install dependencies if wasn't installed
 check_deps() {
@@ -108,6 +109,211 @@ resolve_qproxy_env_file() {
     QPROXY_ENV_FILE="$(get_qproxy_user_home)/.qproxy.env"
 }
 
+resolve_qproxy_session_env_file() {
+    QPROXY_SESSION_ENV_FILE="$(get_qproxy_user_home)/.qproxy.session.env"
+}
+
+resolve_qproxy_session_pending_file() {
+    echo "$(get_qproxy_user_home)/.qproxy.session.pending"
+}
+
+QPROXY_HOOK_MARKER_START='# >>> QProxy session auto-apply START >>>'
+
+# Own user-owned dotfiles when running under sudo
+chown_qproxy_user_file() {
+    local f="$1" quser
+    [ -n "$f" ] || return 0
+    [ -e "$f" ] || return 0
+    quser=$(get_qproxy_user)
+    chmod 600 "$f" 2>/dev/null || true
+    if [ "$(id -u)" -eq 0 ] && [ "$quser" != "root" ]; then
+        chown "$quser:$quser" "$f" 2>/dev/null || true
+    fi
+}
+
+chown_qproxy_session_env_file() {
+    chown_qproxy_user_file "$QPROXY_SESSION_ENV_FILE"
+}
+
+# Walk the process tree to find the interactive shell that launched QProxy
+find_invoking_shell_pid() {
+    local quser pid owner comm
+    quser=$(get_qproxy_user)
+    pid=$(ps -o ppid= -p $$ 2>/dev/null | tr -d ' ')
+    while [ -n "$pid" ] && [ "$pid" -gt 1 ]; do
+        owner=$(ps -o user= -p "$pid" 2>/dev/null | tr -d ' ')
+        comm=$(ps -o comm= -p "$pid" 2>/dev/null | sed 's/^-//')
+        case "$comm" in
+            bash|zsh|sh|fish|dash)
+                if [ "$owner" = "$quser" ]; then
+                    echo "$pid"
+                    return 0
+                fi
+                ;;
+        esac
+        pid=$(ps -o ppid= -p "$pid" 2>/dev/null | tr -d ' ')
+    done
+    return 1
+}
+
+find_invoking_shell_tty() {
+    local pid tty
+    pid=$(find_invoking_shell_pid) || return 1
+    tty=$(ps -o tty= -p "$pid" 2>/dev/null | tr -d ' ')
+    case "$tty" in
+        ?|??)
+            echo "/dev/$tty"
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+# One-time hook: sources ~/.qproxy.session.env on the next prompt after QProxy updates it
+ensure_qproxy_shell_hook_installed() {
+    local qhome quser bashrc zshrc
+    qhome=$(get_qproxy_user_home)
+    quser=$(get_qproxy_user)
+    bashrc="$qhome/.bashrc"
+    zshrc="$qhome/.zshrc"
+
+    if [ ! -f "$bashrc" ]; then
+        touch "$bashrc"
+        chown_qproxy_user_file "$bashrc"
+    fi
+    if ! grep -qF "$QPROXY_HOOK_MARKER_START" "$bashrc" 2>/dev/null; then
+        cat >> "$bashrc" <<'EOF'
+
+# >>> QProxy session auto-apply START >>>
+__qproxy_session_auto_apply() {
+    [ -f "${HOME}/.qproxy.session.pending" ] || return 0
+    [ -f "${HOME}/.qproxy.session.env" ] && . "${HOME}/.qproxy.session.env"
+    rm -f "${HOME}/.qproxy.session.pending"
+}
+if [[ $- == *i* ]] && [[ "${PROMPT_COMMAND:-}" != *__qproxy_session_auto_apply* ]]; then
+    PROMPT_COMMAND="__qproxy_session_auto_apply${PROMPT_COMMAND:+;${PROMPT_COMMAND}}"
+fi
+# <<< QProxy session auto-apply END <<<
+EOF
+        chown_qproxy_user_file "$bashrc"
+    fi
+
+    if [ -f "$zshrc" ]; then
+        if ! grep -qF "$QPROXY_HOOK_MARKER_START" "$zshrc" 2>/dev/null; then
+            cat >> "$zshrc" <<'EOF'
+
+# >>> QProxy session auto-apply START >>>
+__qproxy_session_auto_apply() {
+    [ -f "${HOME}/.qproxy.session.pending" ] || return 0
+    [ -f "${HOME}/.qproxy.session.env" ] && . "${HOME}/.qproxy.session.env"
+    rm -f "${HOME}/.qproxy.session.pending"
+}
+if [[ -o interactive ]] && [[ "${precmd_functions[*]:-}" != *__qproxy_session_auto_apply* ]]; then
+    precmd_functions+=(__qproxy_session_auto_apply)
+fi
+# <<< QProxy session auto-apply END <<<
+EOF
+            chown_qproxy_user_file "$zshrc"
+        fi
+    fi
+}
+
+mark_session_apply_pending() {
+    local pending
+    pending=$(resolve_qproxy_session_pending_file)
+    : > "$pending"
+    chown_qproxy_user_file "$pending"
+}
+
+# Inject "source ..." into the user's shell stdin (works when the shell is at a prompt)
+inject_source_into_invoking_shell() {
+    local shell_pid session_file quser cmd pending
+    resolve_qproxy_session_env_file
+    pending=$(resolve_qproxy_session_pending_file)
+    [ -f "$pending" ] || return 1
+    session_file="$QPROXY_SESSION_ENV_FILE"
+    [ -f "$session_file" ] || return 1
+    shell_pid=$(find_invoking_shell_pid) || return 1
+    quser=$(get_qproxy_user)
+    cmd="source $(printf '%q' "$session_file")"
+
+    if [ ! -r "/proc/$shell_pid/fd/0" ]; then
+        return 1
+    fi
+
+    if [ "$(id -u)" -eq 0 ] && [ "$quser" != "root" ]; then
+        if echo "$cmd" | sudo -u "$quser" tee "/proc/$shell_pid/fd/0" >/dev/null 2>&1; then
+            rm -f "$pending"
+            return 0
+        fi
+    elif echo "$cmd" > "/proc/$shell_pid/fd/0" 2>/dev/null; then
+        rm -f "$pending"
+        return 0
+    fi
+    return 1
+}
+
+# Queue auto-apply for the user's interactive shell (hook + stdin injection)
+apply_session_to_user_shell() {
+    ensure_qproxy_shell_hook_installed
+    mark_session_apply_pending
+    inject_source_into_invoking_shell || true
+}
+
+# Retry stdin injection when QProxy exits and the shell regains the prompt
+finalize_qproxy_session_apply() {
+    local pending
+    pending=$(resolve_qproxy_session_pending_file)
+    [ -f "$pending" ] || return 0
+    inject_source_into_invoking_shell || true
+}
+
+session_auto_apply_msg() {
+    echo "Proxy settings will be applied automatically in your shell when you return to the prompt (usually right after you exit QProxy)."
+}
+
+write_http_session_env_file() {
+    resolve_qproxy_session_env_file
+    cat > "$QPROXY_SESSION_ENV_FILE" <<EOF
+# QProxy temporary session proxy (applied automatically by shell hook)
+export HTTP_PROXY="http://$HTTP_HOST:$HTTP_PORT"
+export http_proxy="http://$HTTP_HOST:$HTTP_PORT"
+export HTTPS_PROXY="http://$HTTP_HOST:$HTTP_PORT"
+export https_proxy="http://$HTTP_HOST:$HTTP_PORT"
+export NO_PROXY="$NO_PROXY_HOSTS"
+export no_proxy="$NO_PROXY_HOSTS"
+export HTTP_PROXY_CONNECTION_TIMEOUT="$PROXY_TIMEOUT"
+export HTTP_PROXY_READ_TIMEOUT="$PROXY_READ_TIMEOUT"
+EOF
+    chown_qproxy_session_env_file
+}
+
+write_socks5_session_env_file() {
+    resolve_qproxy_session_env_file
+    cat > "$QPROXY_SESSION_ENV_FILE" <<EOF
+# QProxy temporary session proxy (applied automatically by shell hook)
+export HTTP_PROXY="socks5h://$SOCKS5_HOST:$SOCKS5_PORT"
+export http_proxy="socks5h://$SOCKS5_HOST:$SOCKS5_PORT"
+export HTTPS_PROXY="socks5h://$SOCKS5_HOST:$SOCKS5_PORT"
+export https_proxy="socks5h://$SOCKS5_HOST:$SOCKS5_PORT"
+export NO_PROXY="$NO_PROXY_HOSTS"
+export no_proxy="$NO_PROXY_HOSTS"
+export HTTP_PROXY_CONNECTION_TIMEOUT="$PROXY_TIMEOUT"
+export HTTP_PROXY_READ_TIMEOUT="$PROXY_READ_TIMEOUT"
+EOF
+    chown_qproxy_session_env_file
+}
+
+write_unset_session_env_file() {
+    resolve_qproxy_session_env_file
+    cat > "$QPROXY_SESSION_ENV_FILE" <<'EOF'
+# QProxy - remove temporary session proxy (applied automatically by shell hook)
+unset HTTP_PROXY http_proxy HTTPS_PROXY https_proxy NO_PROXY no_proxy
+unset HTTP_PROXY_CONNECTION_TIMEOUT HTTP_PROXY_READ_TIMEOUT
+EOF
+    chown_qproxy_session_env_file
+}
+
 # Load proxy host/port settings from the user env file
 load_qproxy_env_file() {
     local env_file="$1"
@@ -165,6 +371,7 @@ EOF
 # Read ~/.qproxy.env on startup; create it from defaults if missing
 init_qproxy_config() {
     resolve_qproxy_env_file
+    ensure_qproxy_shell_hook_installed
     if [ -f "$QPROXY_ENV_FILE" ]; then
         load_qproxy_env_file "$QPROXY_ENV_FILE"
     else
@@ -272,7 +479,7 @@ check_and_install_proxychains() {
 
 # Function to apply proxy to current session
 apply_proxy_to_current_session() {
-    # Apply proxy environment variables to current session
+    # Exports apply only inside this script; the user's shell must source the session file
     export HTTP_PROXY="http://$HTTP_HOST:$HTTP_PORT"
     export http_proxy="http://$HTTP_HOST:$HTTP_PORT"
     export HTTPS_PROXY="http://$HTTP_HOST:$HTTP_PORT"
@@ -281,25 +488,9 @@ apply_proxy_to_current_session() {
     export no_proxy="$NO_PROXY_HOSTS"
     export HTTP_PROXY_CONNECTION_TIMEOUT="$PROXY_TIMEOUT"
     export HTTP_PROXY_READ_TIMEOUT="$PROXY_READ_TIMEOUT"
-    
-    # Also apply to all existing shells for the current user
-    if [ -n "$SUDO_USER" ]; then
-        # If running as sudo, apply to the original user's shells
-        USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
-        USER_SHELLS=$(ps -u "$SUDO_USER" -o pid= -o comm= | grep -E "(bash|zsh|sh|fish)" | awk '{print $1}')
-        
-        for pid in $USER_SHELLS; do
-            if [ -d "/proc/$pid" ]; then
-                # Export environment variables to the shell process
-                echo "export HTTP_PROXY=\"http://$HTTP_HOST:$HTTP_PORT\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
-                echo "export http_proxy=\"http://$HTTP_HOST:$HTTP_PORT\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
-                echo "export HTTPS_PROXY=\"http://$HTTP_HOST:$HTTP_PORT\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
-                echo "export https_proxy=\"http://$HTTP_HOST:$HTTP_PORT\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
-                echo "export NO_PROXY=\"$NO_PROXY_HOSTS\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
-                echo "export no_proxy=\"$NO_PROXY_HOSTS\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
-            fi
-        done
-    fi
+
+    write_http_session_env_file
+    apply_session_to_user_shell
 }
 
 # Function to set os http proxy
@@ -324,12 +515,11 @@ EOP
     # Apply to current session immediately
     apply_proxy_to_current_session
     
-    dialog --title "Success" --msgbox "HTTP Proxy enabled!\n\nProxy is now active in your current session and will persist after reboot." 8 50
+    dialog --title "Success" --msgbox "HTTP Proxy enabled (persistent).\n\nNew shells: /etc/profile.d\nThis terminal: $(session_auto_apply_msg)\n\nPersists after reboot." 11 58
 }
 
 # Function to apply SOCKS5 proxy to current session
 apply_socks5_proxy_to_current_session() {
-    # Apply SOCKS5 proxy environment variables to current session
     export HTTP_PROXY="socks5h://$SOCKS5_HOST:$SOCKS5_PORT"
     export http_proxy="socks5h://$SOCKS5_HOST:$SOCKS5_PORT"
     export HTTPS_PROXY="socks5h://$SOCKS5_HOST:$SOCKS5_PORT"
@@ -338,25 +528,9 @@ apply_socks5_proxy_to_current_session() {
     export no_proxy="$NO_PROXY_HOSTS"
     export HTTP_PROXY_CONNECTION_TIMEOUT="$PROXY_TIMEOUT"
     export HTTP_PROXY_READ_TIMEOUT="$PROXY_READ_TIMEOUT"
-    
-    # Also apply to all existing shells for the current user
-    if [ -n "$SUDO_USER" ]; then
-        # If running as sudo, apply to the original user's shells
-        USER_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
-        USER_SHELLS=$(ps -u "$SUDO_USER" -o pid= -o comm= | grep -E "(bash|zsh|sh|fish)" | awk '{print $1}')
-        
-        for pid in $USER_SHELLS; do
-            if [ -d "/proc/$pid" ]; then
-                # Export environment variables to the shell process
-                echo "export HTTP_PROXY=\"socks5h://$SOCKS5_HOST:$SOCKS5_PORT\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
-                echo "export http_proxy=\"socks5h://$SOCKS5_HOST:$SOCKS5_PORT\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
-                echo "export HTTPS_PROXY=\"socks5h://$SOCKS5_HOST:$SOCKS5_PORT\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
-                echo "export https_proxy=\"socks5h://$SOCKS5_HOST:$SOCKS5_PORT\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
-                echo "export NO_PROXY=\"$NO_PROXY_HOSTS\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
-                echo "export no_proxy=\"$NO_PROXY_HOSTS\"" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
-            fi
-        done
-    fi
+
+    write_socks5_session_env_file
+    apply_session_to_user_shell
 }
 
 # Function to set os socks5 proxy
@@ -381,12 +555,11 @@ EOP
     # Apply to current session immediately
     apply_socks5_proxy_to_current_session
     
-    dialog --title "Success" --msgbox "SOCKS5 Proxy enabled!\n\nProxy is now active in your current session and will persist after reboot." 8 50
+    dialog --title "Success" --msgbox "SOCKS5 Proxy enabled (persistent).\n\nNew shells: /etc/profile.d\nThis terminal: $(session_auto_apply_msg)\n\nPersists after reboot." 11 58
 }
 
 # Function to remove proxy from current session
 remove_proxy_from_current_session() {
-    # Remove proxy environment variables from current session
     unset HTTP_PROXY
     unset http_proxy
     unset HTTPS_PROXY
@@ -395,24 +568,9 @@ remove_proxy_from_current_session() {
     unset no_proxy
     unset HTTP_PROXY_CONNECTION_TIMEOUT
     unset HTTP_PROXY_READ_TIMEOUT
-    
-    # Also remove from all existing shells for the current user
-    if [ -n "$SUDO_USER" ]; then
-        # If running as sudo, remove from the original user's shells
-        USER_SHELLS=$(ps -u "$SUDO_USER" -o pid= -o comm= | grep -E "(bash|zsh|sh|fish)" | awk '{print $1}')
-        
-        for pid in $USER_SHELLS; do
-            if [ -d "/proc/$pid" ]; then
-                # Unset environment variables in the shell process
-                echo "unset HTTP_PROXY" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
-                echo "unset http_proxy" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
-                echo "unset HTTPS_PROXY" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
-                echo "unset https_proxy" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
-                echo "unset NO_PROXY" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
-                echo "unset no_proxy" | sudo -u "$SUDO_USER" tee -a "/proc/$pid/fd/1" >/dev/null 2>&1 || true
-            fi
-        done
-    fi
+
+    write_unset_session_env_file
+    apply_session_to_user_shell
 }
 
 # Function to disable os proxy
@@ -423,7 +581,7 @@ disable_os_env_proxy() {
     # Remove from current session immediately
     remove_proxy_from_current_session
     
-    dialog --title "Success" --msgbox "Proxy disabled!\n\nProxy has been removed from your current session and will not persist after reboot." 8 50
+    dialog --title "Success" --msgbox "Persistent proxy disabled.\n\n$(session_auto_apply_msg)" 9 58
 }
 
 # Function to remove apt proxy
@@ -1690,15 +1848,18 @@ while true; do
             case $session_selection in
                 1)
                     apply_proxy_to_current_session
-                    dialog --title "Success" --msgbox "HTTP Proxy applied to current session!\n\nThis is temporary and will not persist after reboot." 7 50
+                    finalize_qproxy_session_apply
+                    dialog --title "Success" --msgbox "HTTP Proxy applied.\n\n$(session_auto_apply_msg)\n\nTemporary until you close this shell." 10 58
                     ;;
                 2)
                     apply_socks5_proxy_to_current_session
-                    dialog --title "Success" --msgbox "SOCKS5 Proxy applied to current session!\n\nThis is temporary and will not persist after reboot." 7 50
+                    finalize_qproxy_session_apply
+                    dialog --title "Success" --msgbox "SOCKS5 Proxy applied.\n\n$(session_auto_apply_msg)\n\nTemporary until you close this shell." 10 58
                     ;;
                 3)
                     remove_proxy_from_current_session
-                    dialog --title "Success" --msgbox "Proxy removed from current session!\n\nThis only affects the current session." 7 50
+                    finalize_qproxy_session_apply
+                    dialog --title "Success" --msgbox "Proxy removed from session.\n\n$(session_auto_apply_msg)" 9 58
                     ;;
             esac
             ;;
@@ -1709,6 +1870,9 @@ while true; do
     esac
 done
 
+
+# Apply pending session env when returning to the user's shell
+finalize_qproxy_session_apply
 
 # Clear the screen
 clear
