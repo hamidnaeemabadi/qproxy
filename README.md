@@ -4,7 +4,7 @@
 **Author:** Hamid Naeemabadi  
 **Purpose:** Manage proxy configurations on Linux systems and services quickly and efficiently.
 
-## 🚀 Features
+## Features
 
 ### Core Proxy Management
 - **HTTP Proxy Support**: Configure HTTP proxies for system-wide usage
@@ -41,7 +41,7 @@
 - **Multi-Shell Support**: Automatically applies proxy settings to all user shells (bash, zsh, sh, fish)
 - **Proxychains Security**: DNS leak protection and optimized chain configurations
 
-## 📋 Requirements
+## Requirements
 
 - **Operating System**: Linux distributions (Debian, Ubuntu, Fedora, RHEL, CentOS, Arch, OpenSUSE)
 - **Privileges**: Root access required
@@ -51,22 +51,26 @@
   - `curl` - For network testing (auto-installed)
   - `proxychains4` or `proxychains-ng` - For proxy chain functionality (auto-installed if needed)
 
-## 🛠️ Installation
+## Installation
 
 1. Clone the repository:
+
 ```bash
 git clone <repository-url>
-cd qproxy-github
+cd qproxy
 ```
 
 2. Make the script executable:
 ```bash
 chmod +x qproxy.sh
+mv qproxy.sh qproxy
+sudo install ./qproxy -t /usr/bin
+sudp cp proxychains4.conf /etc/proxychains4.conf
 ```
 
 3. Run as root:
 ```bash
-sudo ./qproxy.sh
+sudo qproxy
 ```
 
 **Note**: The script automatically detects your Linux distribution and installs dependencies using the appropriate package manager:
@@ -75,7 +79,7 @@ sudo ./qproxy.sh
 - **Arch/Manjaro**: `pacman` (proxychains-ng)
 - **OpenSUSE/SLES**: `zypper` (proxychains-ng)
 
-## ⚙️ Configuration
+## Configuration
 
 ### Proxy Settings
 Edit the following variables in the script:
@@ -104,7 +108,7 @@ PROXY_READ_TIMEOUT=60
 - **Generalized Format**: All IP addresses use placeholder format (e.g., `10.X.X.X`) for easy customization
 - **Centralized Management**: Change proxy settings in one place, affects all configurations (OS, APT, Docker, Containerd, and Proxychains)
 
-## 🎯 Usage
+## Usage
 
 ### Main Menu Options
 
@@ -125,16 +129,16 @@ PROXY_READ_TIMEOUT=60
    - **NEW**: Performance benchmarking
    - **NEW**: Health check monitoring
 
-4. **Configure Proxychains** ⭐ **NEW**
+4. **Configure Proxychains** **NEW**
    - Configure HTTP Proxy in Proxychains
    - Configure SOCKS5 Proxy in Proxychains
    - Configure Dual Proxy (HTTP + SOCKS5)
    - Disable Proxychains Configuration
    - Test Proxychains Configuration
-   - **Launch Proxychains Shell** ⭐ **NEW in v1.8**
+   - **Launch Proxychains Shell** **NEW in v1.8**
    - **Auto-installation**: Automatically installs proxychains4 if not present
 
-5. **Apply Proxy to Current Session** ⭐ **NEW in v1.7**
+5. **Apply Proxy to Current Session** **NEW in v1.7**
    - Apply HTTP Proxy to Current Session (temporary)
    - Apply SOCKS5 Proxy to Current Session (temporary)
    - Remove Proxy from Current Session
@@ -142,70 +146,6 @@ PROXY_READ_TIMEOUT=60
    - **No Logout Required**: Immediate application without system restart
 
 6. **Exit**
-
-### Interactive Proxy Configuration ⭐ **NEW in v1.9**
-
-QProxy now includes an easy-to-use interactive configuration system:
-
-#### **Guided Setup Wizard**
-- **Step-by-Step Configuration**: Walk through proxy setup with clear instructions
-- **Form-Based Input**: Easy-to-use forms for entering proxy details
-- **Multiple Proxy Support**: Configure HTTP, SOCKS5, or both proxies
-- **Validation**: Automatic validation of proxy settings before saving
-
-#### **Configuration Management**
-- **Save Configuration**: Permanently save your proxy settings to the script
-- **Automatic Backup**: Creates timestamped backup before saving changes
-- **View Current Settings**: Display current proxy configuration at any time
-- **Test Configuration**: Test your proxy settings before using them
-
-#### **User-Friendly Features**
-- **No Manual Editing**: No need to edit script files manually
-- **Clear Instructions**: Helpful explanations for each proxy type
-- **Error Prevention**: Validates input and prevents invalid configurations
-- **Easy Access**: Available as the first menu option for quick setup
-
-### Proxychains Shell Launcher ⭐ **NEW in v1.8**
-
-QProxy now includes a powerful feature to launch a shell with proxychains enabled:
-
-#### **Health-Tested Shell Launch**
-- **Pre-Launch Testing**: Tests proxy server health before launching shell
-- **Comprehensive Validation**: Validates both proxy health and proxychains connectivity
-- **Safe Launch**: Only launches shell with confirmed working proxy configuration
-- **Interactive Environment**: Provides bash shell with all traffic routed through proxy
-
-#### **Safety Features**
-- **Health Check Integration**: Uses existing health check functions for validation
-- **Configuration Validation**: Ensures proxychains configuration exists before launch
-- **Error Prevention**: Prevents launching shell with unhealthy or non-functional proxies
-- **Clear Feedback**: Shows detailed status messages and instructions
-
-#### **Usage**
-- **Menu Access**: Available in "Configure Proxychains" → "Launch Proxychains Shell"
-- **Automatic Testing**: Runs health checks automatically before shell launch
-- **Easy Exit**: Type `exit` to return to QProxy menu
-- **Visual Status**: Clear terminal output showing proxy status and usage instructions
-
-### Current Session Management ⭐ **NEW in v1.7**
-
-QProxy now supports immediate proxy application without requiring logout/login:
-
-#### **Immediate Application**
-- **No Logout Required**: Proxy settings are applied immediately to current session
-- **Multi-Shell Support**: Automatically applies to all existing user shells (bash, zsh, sh, fish)
-- **Process Management**: Detects and manages user shell processes for environment variable injection
-
-#### **Session Types**
-- **Persistent Configuration**: Use "Enable Proxy" for permanent settings that survive reboots
-- **Temporary Session**: Use "Apply Proxy to Current Session" for temporary settings that don't persist
-- **Immediate Removal**: Use "Remove Proxy from Current Session" to quickly disable proxy
-
-#### **Technical Implementation**
-- **Environment Variable Injection**: Direct export/unset operations to shell processes
-- **Process Detection**: Automatic detection of user shell processes via `/proc` filesystem
-- **Error Handling**: Graceful handling of process management errors
-- **User Feedback**: Clear distinction between temporary and persistent configurations
 
 ### Performance Testing
 
@@ -215,7 +155,7 @@ The script includes comprehensive performance testing:
 - **Health Verification**: Ensure proxy connectivity before configuration
 - **Performance Rating**: Automatic performance assessment (Excellent/Good/Fair/Poor)
 
-## 🔧 Advanced Features
+## Advanced Features
 
 ### APT Optimizations
 - Connection timeouts and retry logic
@@ -235,7 +175,7 @@ The script includes comprehensive performance testing:
 - Automatic fallback recommendations
 - Performance impact assessment
 
-## 📊 Performance Metrics
+## Performance Metrics
 
 The script provides detailed performance metrics:
 - **Excellent**: < 100ms overhead
@@ -243,14 +183,14 @@ The script provides detailed performance metrics:
 - **Fair**: < 500ms overhead
 - **Poor**: > 500ms overhead
 
-## 🔒 Security Features
+## Security Features
 
 - **Private Network Exclusion**: Automatic exclusion of RFC 1918 networks
 - **Local Domain Support**: Exclude local domains and localhost
 - **Secure Configuration**: Environment variable-based configuration
 - **Service Isolation**: Individual service proxy management
 
-## 🐛 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -274,11 +214,11 @@ The script provides detailed performance metrics:
 - **Docker Proxy**: `/etc/systemd/system/docker.service.d/proxy.conf`
 - **OS Environment**: `/etc/profile.d/user_proxy_env.sh`
 
-## 📈 Version History
+## Version History
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch
@@ -286,16 +226,16 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 4. Test thoroughly
 5. Submit a pull request
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## 👨‍💻 Author
+## Author
 
 **Hamid Naeemabadi**  
 DevOps Engineer & System Administrator
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Linux community for proxy configuration best practices
 - Docker team for container runtime optimizations
