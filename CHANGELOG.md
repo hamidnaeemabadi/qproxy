@@ -5,6 +5,33 @@ All notable changes to QProxy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] - 2026-07-01
+
+### Added
+- **CLI**: `config show`, `enable`, `disable`, `test`, `uninstall` subcommands alongside TUI
+- **User config file**: `~/.qproxy.env` replaces editing variables in the script
+- **FHS install**: `qproxy install` copies to `/usr/local/lib/qproxy`, symlinks `/usr/local/bin/qproxy`
+- **Install options**: `--no-deps`, `--proxychains-conf`, `--force-proxychains-conf`, `--prefix`
+- **Package manager facade**: auto-detect APT, DNF/YUM, Pacman, or Zypper (`pkgmgr` target)
+- **Session management**: current-session proxy via `~/.qproxy.session.env` and shell hooks
+- **Templates**: shared config templates under `templates/` with variable substitution
+- **Bundled proxychains**: `share/proxychains/proxychains4.conf` installable at setup
+- **Tests**: Bats suite and GitLab CI
+
+### Changed
+- **Modular layout**: logic split into `lib/`, `menus/`, `lib/pkgmgr/`, `lib/ui/`
+- **Version resolution**: `VERSION` file on install, then git tag, then `QPROXY_DEFAULT_VERSION`
+
+## [2.0.0] - 2025-12-01
+
+### Added
+- Initial modular refactor from monolithic `qproxy.sh` to library-based architecture
+- Non-interactive CLI entry point for scripting and automation
+- `qproxy install status` for verifying installed version and paths
+
+### Changed
+- Entry script loads modules from `lib/` and delegates to `cli_main` or `main`
+
 ## [1.8.0] - 2025-10-21
 
 ### Added

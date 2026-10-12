@@ -1,79 +1,63 @@
-# QProxy - Linux Proxy Management Tool
+# QProxy
 
-**Version:** v1.9  
-**Author:** Hamid Naeemabadi  
-**Purpose:** Manage proxy configurations on Linux systems and services quickly and efficiently.
+Linux proxy management for system environment, package managers, Docker, containerd, and proxychains. Interactive TUI or CLI.
 
-## Features
+**Version:** git tag / `VERSION` file / `v2.1.0` default — see [Versioning](#versioning)  
+**Author:** Hamid Naeemabadi
 
-### Core Proxy Management
-- **HTTP Proxy Support**: Configure HTTP proxies for system-wide usage
-- **SOCKS5 Proxy Support**: Configure SOCKS5 proxies with full protocol support
-- **Multi-Service Configuration**: Set up proxies for multiple services simultaneously
-- **Easy Enable/Disable**: Quick toggle between proxy and direct connections
+## Quick start
 
-### Service Integration
-- **OS Environment Variables**: System-wide proxy configuration via environment variables
-- **APT Package Manager**: Optimized proxy settings for package management
-- **Docker Service**: Container runtime proxy configuration with performance optimizations
-- **Containerd (Kubernetes)**: Container runtime proxy support for K8s environments
-- **Proxychains Integration**: Automatic proxychains.conf configuration and management
-- **Current Session Management**: Apply proxy settings immediately without logout/login (NEW in v1.7)
+```bash
+git clone https://github.com/hamidnaeemabadi/qproxy.git
+cd qproxy
+chmod +x qproxy.sh
 
-### Performance Optimizations
-- **Connection Timeouts**: Configurable timeout settings for better reliability
-- **APT Performance Tuning**: Pipeline depth, retry logic, and caching optimizations
-- **Docker Performance**: Concurrent download/upload limits and live-restore support
-- **Health Monitoring**: Pre-configuration proxy health checks
+sudo ./qproxy.sh install              # install to /usr/local, install deps
+sudo ./qproxy.sh install --proxychains-conf   # also seed /etc/proxychains4.conf
 
-### Testing & Monitoring
-- **Proxy Health Checks**: Verify proxy connectivity before configuration
-- **Performance Benchmarking**: Measure proxy overhead and response times
-- **Location Verification**: Check proxy server geographical location
-- **Service-Specific Tests**: Test proxy functionality for each configured service
-- **Proxychains Testing**: Test proxy chain functionality and connectivity
-
-### Security & Reliability
-- **NO_PROXY Configuration**: Smart exclusion of private networks and local domains
-- **Safe Service Restarts**: Docker live-restore support to prevent container downtime
-- **Configuration Backup**: Automatic backup of existing configurations
-- **Error Handling**: Comprehensive error checking and user feedback
-- **Multi-Shell Support**: Automatically applies proxy settings to all user shells (bash, zsh, sh, fish)
-- **Proxychains Security**: DNS leak protection and optimized chain configurations
+sudo qproxy                           # interactive menu
+qproxy config show                    # show current settings
+```
 
 ## Requirements
 
-- **Operating System**: Linux distributions (Debian, Ubuntu, Fedora, RHEL, CentOS, Arch, OpenSUSE)
-- **Privileges**: Root access required
-- **Dependencies**: 
-  - `dialog` - For interactive menus (auto-installed)
-  - `jq` - For JSON processing (auto-installed)
-  - `curl` - For network testing (auto-installed)
-  - `proxychains4` or `proxychains-ng` - For proxy chain functionality (auto-installed if needed)
-
-## Installation
-
-1. Clone the repository:
+- Linux (Debian, Ubuntu, Fedora, RHEL, Arch, OpenSUSE, …)
+- Root for enable/disable/install
+- Auto-installed: `dialog`, `jq`, `curl`; `proxychains4` / `proxychains-ng` when needed
 
 ```bash
-git clone <repository-url>
-cd qproxy
+sudo ./qproxy.sh install --no-deps   # skip dialog/jq/curl package install
+qproxy install status              # check install location
 ```
 
-2. Make the script executable:
+## Versioning
+
+Version is resolved in this order:
+
+1. **`$QPROXY_ROOT/VERSION`** — written on `sudo qproxy install` (used on installed systems)
+2. **Git tag** — `git describe --tags` when running from a git checkout
+3. **Fallback** — `v2.1.0` in `lib/config.sh` (`QPROXY_DEFAULT_VERSION`)
+
+**Release v2.1.0:**
+
 ```bash
-chmod +x qproxy.sh
-mv qproxy.sh qproxy
-sudo install ./qproxy -t /usr/bin
-sudp cp proxychains4.conf /etc/proxychains4.conf
+git tag -a v2.1.0 -m "Release v2.1.0"
+git push origin v2.1.0
+
+# Re-install so /usr/local/lib/qproxy/VERSION is updated
+sudo ./qproxy.sh install
+qproxy install status   # → QProxy v2.1.0
 ```
 
-3. Run as root:
+**Already installed without re-installing:** update the version file only:
+
 ```bash
-sudo qproxy
+echo v2.1.0 | sudo tee /usr/local/lib/qproxy/VERSION
+qproxy install status
 ```
 
 **Note**: The script automatically detects your Linux distribution and installs dependencies using the appropriate package manager:
+
 - **Debian/Ubuntu**: `apt` (proxychains4)
 - **Fedora/RHEL/CentOS**: `dnf`/`yum` (proxychains-ng)
 - **Arch/Manjaro**: `pacman` (proxychains-ng)
@@ -81,142 +65,165 @@ sudo qproxy
 
 ## Configuration
 
-### Proxy Settings
-Edit the following variables in the script:
-```bash
-# SOCKS5 Proxy
-SOCKS5_HOST="10.X.X.X"
-SOCKS5_PORT="1080"
+Proxy settings live in **`~/.qproxy.env`** (created on first run). Edit directly or use the TUI **Configure Proxy Settings** menu.
 
-# HTTP Proxy
+```bash
+# ~/.qproxy.env
 HTTP_HOST="10.X.X.X"
 HTTP_PORT="3128"
-
-# Excluded hosts (private networks)
-NO_PROXY_HOSTS="127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,example.local,localhost,*.local"
-```
-
-### Performance Settings
-```bash
-# Timeout configurations
+SOCKS5_HOST="10.X.X.X"
+SOCKS5_PORT="1080"
+NO_PROXY_HOSTS="127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,localhost,*.local"
 PROXY_TIMEOUT=30
 PROXY_READ_TIMEOUT=60
 ```
 
-### Proxy Configuration Notes
-- **Unified Configuration**: The same proxy variables (`HTTP_HOST`, `HTTP_PORT`, `SOCKS5_HOST`, `SOCKS5_PORT`) are used for all services including proxychains
-- **Generalized Format**: All IP addresses use placeholder format (e.g., `10.X.X.X`) for easy customization
-- **Centralized Management**: Change proxy settings in one place, affects all configurations (OS, APT, Docker, Containerd, and Proxychains)
+`qproxy config show` prints the active values and config path.
 
-## Usage
+## CLI
 
-### Main Menu Options
+Most commands need root (`sudo qproxy …`). `config show` and `install status` do not.
 
-1. **Enable Proxy**
-   - Enable HTTP/SOCKS5 Proxy on OS Environment
-   - Enable HTTP/SOCKS5 Proxy on APT Package Manager
-   - Enable HTTP Proxy on Docker Service
-   - Enable HTTP Proxy on Containerd (Kubernetes) Service
+| Command | Description |
+|---------|-------------|
+| `qproxy` | Interactive TUI (default) |
+| `qproxy -h` | Show CLI help |
+| `qproxy install [options]` | Install under `/usr/local` (or `--prefix`) |
+| `qproxy install status` | Show install path and version |
+| `qproxy uninstall` | Remove system install (keeps `~/.qproxy.env`) |
+| `qproxy config show` | Show HTTP/SOCKS5 hosts, NO_PROXY, timeouts |
+| `qproxy enable <target> [type]` | Enable proxy on a service |
+| `qproxy disable <target>` | Disable proxy on a service |
+| `qproxy test <check> [type]` | Run connectivity / health tests |
 
-2. **Disable Proxy**
-   - Disable proxies from individual services
-   - Complete proxy removal from all services
+### Install options
 
-3. **Test Proxies**
-   - Test OS Environment proxy configuration
-   - Test Docker proxy functionality
-   - Test APT proxy settings
-   - **NEW**: Performance benchmarking
-   - **NEW**: Health check monitoring
+| Option | Description |
+|--------|-------------|
+| `--no-deps` | Skip installing `dialog`, `jq`, `curl` |
+| `--proxychains-conf` | Install bundled `proxychains4.conf` if `/etc` file is missing |
+| `--force-proxychains-conf` | Replace existing `/etc/proxychains4.conf` |
+| `--prefix PATH` | Install under `PATH` instead of `/usr/local` |
 
-4. **Configure Proxychains** **NEW**
-   - Configure HTTP Proxy in Proxychains
-   - Configure SOCKS5 Proxy in Proxychains
-   - Configure Dual Proxy (HTTP + SOCKS5)
-   - Disable Proxychains Configuration
-   - Test Proxychains Configuration
-   - **Launch Proxychains Shell** **NEW in v1.8**
-   - **Auto-installation**: Automatically installs proxychains4 if not present
+### Targets (`enable` / `disable`)
 
-5. **Apply Proxy to Current Session** **NEW in v1.7**
-   - Apply HTTP Proxy to Current Session (temporary)
-   - Apply SOCKS5 Proxy to Current Session (temporary)
-   - Remove Proxy from Current Session
-   - **Multi-Shell Support**: Applies to all user shells (bash, zsh, sh, fish)
-   - **No Logout Required**: Immediate application without system restart
+| Target | Description |
+|--------|-------------|
+| `os-env` | System-wide env via `/etc/profile.d/user_proxy_env.sh` |
+| `apt` | APT (Debian/Ubuntu) — `http` or `socks5` |
+| `pkgmgr` | Auto-detect distro package manager (HTTP) |
+| `docker` | Docker systemd drop-in |
+| `containerd` | Containerd systemd drop-in |
+| `proxychains` | Proxychains — `http`, `socks5`, or `dual` |
 
-6. **Exit**
+### Tests (`test`)
 
-### Performance Testing
+| Check | Type | Description |
+|-------|------|-------------|
+| `health` | `http` \| `socks5` | Proxy reachability before applying config |
+| `apt` | — | APT proxy test |
+| `pkgmgr` | — | Package manager proxy test |
+| `docker` | — | Docker proxy test |
+| `containerd` | — | Containerd proxy test |
+| `proxychains` | — | Proxychains chain test |
 
-The script includes comprehensive performance testing:
-- **Response Time Measurement**: Compare proxy vs direct connection speeds
-- **Overhead Calculation**: Measure proxy performance impact
-- **Health Verification**: Ensure proxy connectivity before configuration
-- **Performance Rating**: Automatic performance assessment (Excellent/Good/Fair/Poor)
+### Examples
 
-## Advanced Features
+```bash
+# Install
+sudo ./qproxy.sh install
+sudo qproxy install --no-deps --prefix /opt
+qproxy install status
 
-### APT Optimizations
-- Connection timeouts and retry logic
-- Pipeline depth optimization (5 concurrent connections)
-- Cache management for better performance
-- Automatic dependency installation
+# View config
+qproxy config show
 
-### Docker Optimizations
-- Concurrent download/upload limits
-- Live-restore support for zero-downtime restarts
-- Log rotation and size management
-- Registry mirror support (configurable)
+# Enable proxies (sudo)
+sudo qproxy enable os-env http
+sudo qproxy enable apt socks5
+sudo qproxy enable pkgmgr
+sudo qproxy enable docker
+sudo qproxy enable proxychains dual
 
-### Health Monitoring
-- Pre-configuration proxy validation
-- Real-time connectivity testing
-- Automatic fallback recommendations
-- Performance impact assessment
+# Disable
+sudo qproxy disable docker
+sudo qproxy disable os-env
 
-## Performance Metrics
+# Tests
+qproxy test health http
+sudo qproxy test docker
+sudo qproxy test proxychains
 
-The script provides detailed performance metrics:
-- **Excellent**: < 100ms overhead
-- **Good**: < 300ms overhead  
-- **Fair**: < 500ms overhead
-- **Poor**: > 500ms overhead
+# Remove install
+sudo qproxy uninstall
+```
 
-## Security Features
+## Proxychains
 
-- **Private Network Exclusion**: Automatic exclusion of RFC 1918 networks
-- **Local Domain Support**: Exclude local domains and localhost
-- **Secure Configuration**: Environment variable-based configuration
-- **Service Isolation**: Individual service proxy management
+Proxy hosts/ports come from `~/.qproxy.env`. QProxy writes `/etc/proxychains4.conf` from templates when you enable a mode.
+
+```bash
+# 1. Set proxy endpoints (edit file or use TUI)
+qproxy config show
+
+# 2. Configure proxychains (pick one)
+sudo qproxy enable proxychains http
+sudo qproxy enable proxychains socks5
+sudo qproxy enable proxychains dual      # HTTP + SOCKS5 chain
+
+# 3. Verify the chain works
+sudo qproxy test proxychains
+
+# 4. Run a single command through the proxy
+proxychains4 curl -s http://httpbin.org/ip
+proxychains4 wget -qO- https://example.com
+proxychains4 git clone https://github.com/example/repo.git
+
+# 5. Interactive shell with all traffic proxied (TUI only)
+sudo qproxy    # → Configure Proxychains → Launch Proxychains Shell
+
+# 6. Disable / reset
+sudo qproxy disable proxychains
+```
+
+**Install bundled base config** (optional, on first install):
+
+```bash
+sudo qproxy install --proxychains-conf
+```
+
+More detail: [docs/proxychains-config-guide.md](docs/proxychains-config-guide.md)
+
+## Interactive menu
+
+Run `sudo qproxy` with no arguments:
+
+1. Configure proxy settings  
+2. Enable / disable proxy (OS, pkgmgr, APT, Docker, containerd)  
+3. Test proxies (health, performance, per-service)  
+4. Configure proxychains (HTTP, SOCKS5, dual, shell launcher)  
+5. Apply proxy to current session (no logout)
+
+Proxychains details: [docs/proxychains-config-guide.md](docs/proxychains-config-guide.md)
 
 ## Troubleshooting
 
-### Common Issues
+| Issue | What to check |
+|-------|----------------|
+| Health check fails | Host/port in `~/.qproxy.env`, firewall, proxy auth |
+| APT still slow | `sudo qproxy disable apt` then re-enable; `apt clean` |
+| Docker restart | Live-restore in daemon config; check `docker.service.d/proxy.conf` |
 
-1. **Proxy Health Check Failed**
-   - Verify proxy server connectivity
-   - Check firewall settings
-   - Confirm proxy credentials (if required)
+Config paths:
 
-2. **Docker Service Restart Issues**
-   - Ensure live-restore is enabled
-   - Check Docker daemon configuration
-   - Verify systemd service status
-
-3. **APT Proxy Configuration**
-   - Clear APT cache: `apt clean && apt autoclean`
-   - Verify proxy configuration files
-   - Check network connectivity
-
-### Log Locations
 - **APT Proxy**: `/etc/apt/apt.conf.d/apt_proxy_*`
-- **Docker Proxy**: `/etc/systemd/system/docker.service.d/proxy.conf`
+- **Docker Service Proxy**: `/etc/systemd/system/docker.service.d/proxy.conf`
+- **Docker CLI Proxy**: `~/.docker/config.json` (all users + `/etc/skel/.docker/config.json`)
 - **OS Environment**: `/etc/profile.d/user_proxy_env.sh`
 
-## Version History
+## Changelog
 
-See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
+See [CHANGELOG.md](CHANGELOG.md).
 
 ## Contributing
 
@@ -228,19 +235,4 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed version history and updates.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## Author
-
-**Hamid Naeemabadi**  
-DevOps Engineer & System Administrator
-
-## Acknowledgments
-
-- Linux community for proxy configuration best practices
-- Docker team for container runtime optimizations
-- Debian/Ubuntu maintainers for APT package management
-
----
-
-**Note**: This tool is designed for Debian-based Linux distributions. For other distributions, modifications may be required.
+MIT — see [LICENSE](LICENSE).

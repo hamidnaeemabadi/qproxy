@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, dev]
+  pull_request:
+    branches: [main, master, dev]
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install shellcheck
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+      - name: Run shellcheck
+        run: shellcheck qproxy.sh lib/*.sh lib/**/*.sh menus/*.sh run-tests.sh
+
+  bats:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install bats
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bats
+      - name: Run tests
+        run: |
+          chmod +x run-tests.sh qproxy.sh
+          ./run-tests.sh

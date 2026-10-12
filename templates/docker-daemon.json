@@ -1,0 +1,11 @@
+{
+    "max-concurrent-downloads": 3,
+    "max-concurrent-uploads": 5,
+    "max-download-attempts": 5,
+    "live-restore": true,
+    "log-driver": "json-file",
+    "log-opts": {
+        "max-size": "10m",
+        "max-file": "3"
+    }
+}
