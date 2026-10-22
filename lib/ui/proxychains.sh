@@ -87,7 +87,7 @@ launch_proxychains_shell() {
         echo "Type 'exit' to return to QProxy"
         echo "=========================================="
         echo ""
-        exec proxychains4 bash
+        exec "$(proxychains_bin)" bash
     else
         ui_error "Error" "Proxychains test failed!\n\nCannot launch shell with non-functional proxy."
         return 1

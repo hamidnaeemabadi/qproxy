@@ -1,2 +1,4 @@
 .vscode
-.git/config
+.bats-core
+tempfile
+*.backup.*

@@ -2,7 +2,7 @@
 ########################################################
 # Author: [Hamid Naeemabadi]
 # Script Name: QProxy
-# Purpose: [Manage the proxy configs on Linux and services quickly.]
+# Purpose: [Manage the proxy configs on Linux/macOS and services quickly.]
 ########################################################
 
 QPROXY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,6 +28,7 @@ source "$QPROXY_ROOT/lib/pkgmgr/apt.sh"
 source "$QPROXY_ROOT/lib/pkgmgr/dnf.sh"
 source "$QPROXY_ROOT/lib/pkgmgr/pacman.sh"
 source "$QPROXY_ROOT/lib/pkgmgr/zypper.sh"
+source "$QPROXY_ROOT/lib/pkgmgr/homebrew.sh"
 source "$QPROXY_ROOT/lib/ui.sh"
 source "$QPROXY_ROOT/lib/ui/pkgmgr-apt.sh"
 source "$QPROXY_ROOT/lib/pkgmgr/facade.sh"

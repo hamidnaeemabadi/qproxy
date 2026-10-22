@@ -5,6 +5,22 @@ All notable changes to QProxy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **macOS support**: Darwin detection, Homebrew deps (`dialog`, `jq`, `curl`, `proxychains-ng`)
+- **Homebrew pkgmgr backend**: `pkgmgr` target on macOS writes brew-prefix proxy env + profile hooks
+- **Docker Desktop**: `docker` target merges proxies into `~/.docker/daemon.json` and relaunches Docker.app
+- **macOS OS env**: persistent proxy via brew/etc/qproxy + `/etc/zprofile` / `/etc/profile` source markers
+- **CI**: `macos-latest` Bats job
+
+### Changed
+- Session inject via `/proc/$pid/fd/0` skipped on macOS (hooks + pending file only)
+- Portable performance timing (no GNU `date +%s%N`)
+- TUI/CLI hide or refuse APT and containerd on macOS
+- `docker-cli` on macOS configures the invoking user only
+- Proxychains conf resolves to `$(brew --prefix)/etc/proxychains.conf` on macOS
+
 ## [2.1.0] - 2026-07-01
 
 ### Added

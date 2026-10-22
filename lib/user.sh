@@ -10,14 +10,24 @@ get_qproxy_user_home() {
     local quser qhome
     quser=$(get_qproxy_user)
     if [ "$quser" = "root" ]; then
-        echo "${HOME:-/root}"
-    else
-        qhome=$(getent passwd "$quser" 2>/dev/null | cut -d: -f6)
-        if [ -n "$qhome" ]; then
-            echo "$qhome"
+        if [ "$(detect_os 2>/dev/null || uname -s)" = "darwin" ] || [ "$(uname -s 2>/dev/null)" = "Darwin" ]; then
+            echo "${HOME:-/var/root}"
         else
             echo "${HOME:-/root}"
         fi
+        return 0
+    fi
+    qhome=$(getent passwd "$quser" 2>/dev/null | cut -d: -f6)
+    if [ -z "$qhome" ] && command -v dscl >/dev/null 2>&1; then
+        qhome=$(dscl . -read "/Users/$quser" NFSHomeDirectory 2>/dev/null | awk '{print $2}')
+    fi
+    if [ -z "$qhome" ]; then
+        qhome=$(eval echo "~$quser" 2>/dev/null)
+    fi
+    if [ -n "$qhome" ] && [ -d "$qhome" ]; then
+        echo "$qhome"
+    else
+        echo "${HOME:-/root}"
     fi
 }
 

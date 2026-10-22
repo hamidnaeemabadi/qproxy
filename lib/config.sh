@@ -38,6 +38,54 @@ USER_PROXY_ENV_PATH="/etc/profile.d/user_proxy_env.sh"
 PROXYCHAINS_CONF_PATH="/etc/proxychains4.conf"
 QPROXY_ENV_FILE=""
 QPROXY_SESSION_ENV_FILE=""
+QPROXY_OS_ENV_MARKER_START='# >>> QProxy OS env START >>>'
+QPROXY_OS_ENV_MARKER_END='# <<< QProxy OS env END <<<'
+QPROXY_BREW_ENV_MARKER_START='# >>> QProxy Homebrew proxy START >>>'
+QPROXY_BREW_ENV_MARKER_END='# <<< QProxy Homebrew proxy END <<<'
+
+detect_os() {
+    case "$(uname -s 2>/dev/null)" in
+        Darwin) echo darwin ;;
+        Linux) echo linux ;;
+        *) echo unknown ;;
+    esac
+}
+
+qproxy_brew_prefix() {
+    if command -v brew >/dev/null 2>&1; then
+        brew --prefix 2>/dev/null && return 0
+    fi
+    if [ -x /opt/homebrew/bin/brew ]; then
+        echo /opt/homebrew
+        return 0
+    fi
+    if [ -x /usr/local/bin/brew ]; then
+        echo /usr/local
+        return 0
+    fi
+    return 1
+}
+
+qproxy_init_platform_paths() {
+    local brew_prefix
+    if [ "$(detect_os)" = "darwin" ]; then
+        SCRIPT_NAME="QProxy for macOS $VERSION by Hamid Naeemabadi"
+        USER_PROXY_ENV_PATH="/usr/local/etc/qproxy/user_proxy_env.sh"
+        PROXYCHAINS_CONF_PATH="/usr/local/etc/proxychains.conf"
+        if brew_prefix=$(qproxy_brew_prefix); then
+            USER_PROXY_ENV_PATH="${brew_prefix}/etc/qproxy/user_proxy_env.sh"
+            if [ -f "${brew_prefix}/etc/proxychains.conf" ] || [ ! -f /etc/proxychains4.conf ]; then
+                PROXYCHAINS_CONF_PATH="${brew_prefix}/etc/proxychains.conf"
+            fi
+        fi
+    else
+        SCRIPT_NAME="QProxy for Linux $VERSION by Hamid Naeemabadi"
+        USER_PROXY_ENV_PATH="/etc/profile.d/user_proxy_env.sh"
+        PROXYCHAINS_CONF_PATH="/etc/proxychains4.conf"
+    fi
+}
+
+qproxy_init_platform_paths
 
 config_http_url() { echo "http://${HTTP_HOST}:${HTTP_PORT}"; }
 config_socks5_url() { echo "socks5h://${SOCKS5_HOST}:${SOCKS5_PORT}"; }

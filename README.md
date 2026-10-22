@@ -1,7 +1,8 @@
 # QProxy
 
-Linux proxy management for system environment, package managers, Docker, containerd, and proxychains. Interactive TUI or CLI.
+Proxy management for system environment, package managers, Docker, containerd, and proxychains. Interactive TUI or CLI.
 
+**Platforms:** Linux (Debian, Ubuntu, Fedora, RHEL, Arch, OpenSUSE, …) and **macOS** (Homebrew + Docker Desktop)  
 **Version:** git tag / `VERSION` file / `v2.1.0` default — see [Versioning](#versioning)  
 **Author:** Hamid Naeemabadi
 
@@ -13,17 +14,36 @@ cd qproxy
 chmod +x qproxy.sh
 
 sudo ./qproxy.sh install              # install to /usr/local, install deps
-sudo ./qproxy.sh install --proxychains-conf   # also seed /etc/proxychains4.conf
+sudo ./qproxy.sh install --proxychains-conf   # also seed proxychains conf
 
 sudo qproxy                           # interactive menu
 qproxy config show                    # show current settings
 ```
 
+### macOS
+
+```bash
+# Homebrew required for deps / pkgmgr / proxychains
+brew install dialog jq curl
+
+sudo ./qproxy.sh install              # uses brew for dialog/jq/curl
+sudo qproxy enable os-env http
+sudo qproxy enable pkgmgr             # Homebrew proxy env
+qproxy enable docker-cli              # ~/.docker/config.json (no sudo)
+qproxy enable docker                  # Docker Desktop daemon.json
+```
+
 ## Requirements
 
-- Linux (Debian, Ubuntu, Fedora, RHEL, Arch, OpenSUSE, …)
-- Root for enable/disable/install
-- Auto-installed: `dialog`, `jq`, `curl`; `proxychains4` / `proxychains-ng` when needed
+| | Linux | macOS |
+|---|--------|--------|
+| OS | Debian, Ubuntu, Fedora, RHEL, Arch, OpenSUSE, … | macOS 13+ (tested on macOS 27) |
+| Privileges | Root for enable/disable/install | Root for system os-env / install; docker-cli & Docker Desktop daemon can be user-scoped |
+| Deps | `dialog`, `jq`, `curl` (auto via apt/dnf/…) | Same via Homebrew |
+| Package manager target | apt / dnf / pacman / zypper | **Homebrew** |
+| Docker | systemd Docker + CLI | **Docker Desktop** (`daemon.json` + CLI) |
+| containerd | systemd drop-in | Not available (use Docker Desktop) |
+| Proxychains | `/etc/proxychains4.conf` | `$(brew --prefix)/etc/proxychains.conf` |
 
 ```bash
 sudo ./qproxy.sh install --no-deps   # skip dialog/jq/curl package install
@@ -56,12 +76,13 @@ echo v2.1.0 | sudo tee /usr/local/lib/qproxy/VERSION
 qproxy install status
 ```
 
-**Note**: The script automatically detects your Linux distribution and installs dependencies using the appropriate package manager:
+**Note**: The script detects your platform and installs dependencies accordingly:
 
 - **Debian/Ubuntu**: `apt` (proxychains4)
 - **Fedora/RHEL/CentOS**: `dnf`/`yum` (proxychains-ng)
 - **Arch/Manjaro**: `pacman` (proxychains-ng)
 - **OpenSUSE/SLES**: `zypper` (proxychains-ng)
+- **macOS**: Homebrew (`dialog`, `jq`, `curl`, `proxychains-ng`)
 
 ## Configuration
 
@@ -82,7 +103,7 @@ PROXY_READ_TIMEOUT=60
 
 ## CLI
 
-Most commands need root (`sudo qproxy …`). `config show` and `install status` do not.
+Most commands need root (`sudo qproxy …`). Exceptions: `config show`, `install status`, `test health`, `docker-cli`, and on macOS `docker` (Docker Desktop user daemon.json).
 
 | Command | Description |
 |---------|-------------|
@@ -101,30 +122,31 @@ Most commands need root (`sudo qproxy …`). `config show` and `install status` 
 | Option | Description |
 |--------|-------------|
 | `--no-deps` | Skip installing `dialog`, `jq`, `curl` |
-| `--proxychains-conf` | Install bundled `proxychains4.conf` if `/etc` file is missing |
-| `--force-proxychains-conf` | Replace existing `/etc/proxychains4.conf` |
+| `--proxychains-conf` | Install bundled proxychains conf if missing |
+| `--force-proxychains-conf` | Replace existing proxychains conf |
 | `--prefix PATH` | Install under `PATH` instead of `/usr/local` |
 
 ### Targets (`enable` / `disable`)
 
-| Target | Description |
-|--------|-------------|
-| `os-env` | System-wide env via `/etc/profile.d/user_proxy_env.sh` |
-| `apt` | APT (Debian/Ubuntu) — `http` or `socks5` |
-| `pkgmgr` | Auto-detect distro package manager (HTTP) |
-| `docker` | Docker systemd drop-in |
-| `containerd` | Containerd systemd drop-in |
-| `proxychains` | Proxychains — `http`, `socks5`, or `dual` |
+| Target | Linux | macOS |
+|--------|-------|-------|
+| `os-env` | `/etc/profile.d/user_proxy_env.sh` | `$(brew --prefix)/etc/qproxy/…` sourced from `/etc/zprofile` + `/etc/profile` |
+| `apt` | APT http/socks5 | N/A |
+| `pkgmgr` | Auto distro PM | Homebrew |
+| `docker` | systemd drop-in | Docker Desktop `~/.docker/daemon.json` proxies |
+| `docker-cli` | all users + `/etc/skel` | current user only |
+| `containerd` | systemd drop-in | N/A |
+| `proxychains` | `/etc/proxychains4.conf` | brew `etc/proxychains.conf` |
 
 ### Tests (`test`)
 
 | Check | Type | Description |
 |-------|------|-------------|
 | `health` | `http` \| `socks5` | Proxy reachability before applying config |
-| `apt` | — | APT proxy test |
-| `pkgmgr` | — | Package manager proxy test |
-| `docker` | — | Docker proxy test |
-| `containerd` | — | Containerd proxy test |
+| `apt` | — | APT proxy test (Linux) |
+| `pkgmgr` | — | Package manager / Homebrew proxy test |
+| `docker` | — | Docker / Docker Desktop proxy test |
+| `containerd` | — | Containerd proxy test (Linux) |
 | `proxychains` | — | Proxychains chain test |
 
 ### Examples
@@ -138,11 +160,12 @@ qproxy install status
 # View config
 qproxy config show
 
-# Enable proxies (sudo)
+# Enable proxies (sudo where required)
 sudo qproxy enable os-env http
-sudo qproxy enable apt socks5
-sudo qproxy enable pkgmgr
+sudo qproxy enable apt socks5          # Linux
+sudo qproxy enable pkgmgr              # Homebrew on macOS
 sudo qproxy enable docker
+qproxy enable docker-cli
 sudo qproxy enable proxychains dual
 
 # Disable
@@ -160,7 +183,7 @@ sudo qproxy uninstall
 
 ## Proxychains
 
-Proxy hosts/ports come from `~/.qproxy.env`. QProxy writes `/etc/proxychains4.conf` from templates when you enable a mode.
+Proxy hosts/ports come from `~/.qproxy.env`. QProxy writes the proxychains conf from templates when you enable a mode.
 
 ```bash
 # 1. Set proxy endpoints (edit file or use TUI)
@@ -199,10 +222,12 @@ More detail: [docs/proxychains-config-guide.md](docs/proxychains-config-guide.md
 Run `sudo qproxy` with no arguments:
 
 1. Configure proxy settings  
-2. Enable / disable proxy (OS, pkgmgr, APT, Docker, containerd)  
+2. Enable / disable proxy (OS, pkgmgr/Homebrew, Docker, …)  
 3. Test proxies (health, performance, per-service)  
 4. Configure proxychains (HTTP, SOCKS5, dual, shell launcher)  
 5. Apply proxy to current session (no logout)
+
+On macOS the TUI omits APT and containerd; package manager means Homebrew.
 
 Proxychains details: [docs/proxychains-config-guide.md](docs/proxychains-config-guide.md)
 
@@ -212,14 +237,19 @@ Proxychains details: [docs/proxychains-config-guide.md](docs/proxychains-config-
 |-------|----------------|
 | Health check fails | Host/port in `~/.qproxy.env`, firewall, proxy auth |
 | APT still slow | `sudo qproxy disable apt` then re-enable; `apt clean` |
-| Docker restart | Live-restore in daemon config; check `docker.service.d/proxy.conf` |
+| Docker restart (Linux) | Live-restore in daemon config; check `docker.service.d/proxy.conf` |
+| Docker Desktop (macOS) | `~/.docker/daemon.json` proxies; relaunch Docker.app |
+| Homebrew ignores proxy | New shell after `pkgmgr` enable; check brew etc env file |
 
 Config paths:
 
-- **APT Proxy**: `/etc/apt/apt.conf.d/apt_proxy_*`
-- **Docker Service Proxy**: `/etc/systemd/system/docker.service.d/proxy.conf`
-- **Docker CLI Proxy**: `~/.docker/config.json` (all users + `/etc/skel/.docker/config.json`)
-- **OS Environment**: `/etc/profile.d/user_proxy_env.sh`
+- **APT Proxy**: `/etc/apt/apt.conf.d/apt_proxy_*` (Linux)
+- **Homebrew Proxy**: `$(brew --prefix)/etc/qproxy-homebrew-proxy.env.sh` (macOS)
+- **Docker Service Proxy (Linux)**: `/etc/systemd/system/docker.service.d/proxy.conf`
+- **Docker Desktop (macOS)**: `~/.docker/daemon.json` (`proxies`)
+- **Docker CLI Proxy**: `~/.docker/config.json`
+- **OS Environment (Linux)**: `/etc/profile.d/user_proxy_env.sh`
+- **OS Environment (macOS)**: `$(brew --prefix)/etc/qproxy/user_proxy_env.sh` via `/etc/zprofile`
 
 ## Changelog
 

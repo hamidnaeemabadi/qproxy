@@ -1,4 +1,8 @@
 set_containerd_http_proxy() {
+    if [ "$(detect_os)" = "darwin" ]; then
+        ui_error "Error" "Containerd is not supported on macOS.\n\nUse Docker Desktop (docker / docker-cli targets) instead."
+        return 1
+    fi
     if containerd_set_http_proxy; then
         ui_success "Success" "Containerd HTTP Proxy configured successfully!"
     else
@@ -9,6 +13,10 @@ set_containerd_http_proxy() {
 
 disable_containerd_proxy() {
     local rc
+    if [ "$(detect_os)" = "darwin" ]; then
+        ui_error "Error" "Containerd is not supported on macOS."
+        return 1
+    fi
     if ! containerd_is_available; then
         ui_error "Error" "Containerd not found!"
         return 1
@@ -23,6 +31,10 @@ disable_containerd_proxy() {
 }
 
 test_containerd_proxy() {
+    if [ "$(detect_os)" = "darwin" ]; then
+        ui_error "Error" "Containerd is not supported on macOS."
+        return 1
+    fi
     if ! containerd_is_available; then
         ui_error "Error" "Containerd could not be found. Please install containerd first."
         return 1

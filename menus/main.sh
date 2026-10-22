@@ -18,62 +18,107 @@ menu_configure_proxy() {
 }
 
 menu_enable_proxy() {
-    dialog --title "Enable Proxy" \
-    --checklist "Where you want to set the HTTP/SOCKS5 Proxy:" 15 74 9 \
-    1 "Enable HTTP Proxy on OS ENV" off \
-    2 "Enable SOCKS5 Proxy on OS ENV" off \
-    3 "Enable HTTP Proxy on Package Manager (Auto-detect)" off \
-    4 "Enable SOCKS5 Proxy on APT (Debian/Ubuntu only)" off \
-    5 "Enable HTTP Proxy on Docker Service" off \
-    6 "Enable HTTP Proxy on Docker CLI (all users)" off \
-    7 "Enable HTTP Proxy on Containerd (K8s) Service" off 2>tempfile
+    if [ "$(detect_os)" = "darwin" ]; then
+        dialog --title "Enable Proxy" \
+        --checklist "Where you want to set the HTTP/SOCKS5 Proxy:" 14 74 7 \
+        1 "Enable HTTP Proxy on OS ENV" off \
+        2 "Enable SOCKS5 Proxy on OS ENV" off \
+        3 "Enable HTTP Proxy on Homebrew" off \
+        4 "Enable HTTP Proxy on Docker Desktop (daemon.json)" off \
+        5 "Enable HTTP Proxy on Docker CLI" off 2>tempfile
+    else
+        dialog --title "Enable Proxy" \
+        --checklist "Where you want to set the HTTP/SOCKS5 Proxy:" 15 74 9 \
+        1 "Enable HTTP Proxy on OS ENV" off \
+        2 "Enable SOCKS5 Proxy on OS ENV" off \
+        3 "Enable HTTP Proxy on Package Manager (Auto-detect)" off \
+        4 "Enable SOCKS5 Proxy on APT (Debian/Ubuntu only)" off \
+        5 "Enable HTTP Proxy on Docker Service" off \
+        6 "Enable HTTP Proxy on Docker CLI (all users)" off \
+        7 "Enable HTTP Proxy on Containerd (K8s) Service" off 2>tempfile
+    fi
 
     local selections selection
     selections=$(<tempfile)
 
     for selection in $selections; do
-        case $selection in
-            1) set_os_env_http_proxy ;;
-            2) set_os_env_socks5_proxy ;;
-            3) set_auto_package_manager_proxy ;;
-            4) set_apt_socks5_proxy ;;
-            5) set_docker_http_proxy ;;
-            6) set_docker_cli_http_proxy ;;
-            7) set_containerd_http_proxy ;;
-        esac
+        if [ "$(detect_os)" = "darwin" ]; then
+            case $selection in
+                1) set_os_env_http_proxy ;;
+                2) set_os_env_socks5_proxy ;;
+                3) set_auto_package_manager_proxy ;;
+                4) set_docker_http_proxy ;;
+                5) set_docker_cli_http_proxy ;;
+            esac
+        else
+            case $selection in
+                1) set_os_env_http_proxy ;;
+                2) set_os_env_socks5_proxy ;;
+                3) set_auto_package_manager_proxy ;;
+                4) set_apt_socks5_proxy ;;
+                5) set_docker_http_proxy ;;
+                6) set_docker_cli_http_proxy ;;
+                7) set_containerd_http_proxy ;;
+            esac
+        fi
     done
 }
 
 menu_disable_proxy() {
-    dialog --title "Disable Proxy" \
-    --checklist "Choose the action you want to perform (with space or mouse click):" 15 74 8 \
-    1 "Disable HTTP/SOCKS5 Proxy on OS ENV" off \
-    2 "Disable HTTP Proxy on Package Manager (Auto-detect)" off \
-    3 "Disable HTTP/SOCKS5 Proxy on APT" off \
-    4 "Disable HTTP/SOCKS5 Proxy on Docker Service" off \
-    5 "Disable HTTP Proxy on Docker CLI (all users)" off \
-    6 "Disable HTTP/SOCKS5 Proxy on Containerd (K8s) Service" off \
-    7 "Disable HTTP/SOCKS5 Completely" off 2>tempfile
+    if [ "$(detect_os)" = "darwin" ]; then
+        dialog --title "Disable Proxy" \
+        --checklist "Choose the action you want to perform (with space or mouse click):" 14 74 6 \
+        1 "Disable HTTP/SOCKS5 Proxy on OS ENV" off \
+        2 "Disable HTTP Proxy on Homebrew" off \
+        3 "Disable HTTP Proxy on Docker Desktop" off \
+        4 "Disable HTTP Proxy on Docker CLI" off \
+        5 "Disable HTTP/SOCKS5 Completely" off 2>tempfile
+    else
+        dialog --title "Disable Proxy" \
+        --checklist "Choose the action you want to perform (with space or mouse click):" 15 74 8 \
+        1 "Disable HTTP/SOCKS5 Proxy on OS ENV" off \
+        2 "Disable HTTP Proxy on Package Manager (Auto-detect)" off \
+        3 "Disable HTTP/SOCKS5 Proxy on APT" off \
+        4 "Disable HTTP/SOCKS5 Proxy on Docker Service" off \
+        5 "Disable HTTP Proxy on Docker CLI (all users)" off \
+        6 "Disable HTTP/SOCKS5 Proxy on Containerd (K8s) Service" off \
+        7 "Disable HTTP/SOCKS5 Completely" off 2>tempfile
+    fi
 
     local selections selection
     selections=$(<tempfile)
 
     for selection in $selections; do
-        case $selection in
-            1) disable_os_env_proxy ;;
-            2) remove_auto_package_manager_proxy ;;
-            3) remove_old_apt_proxy ;;
-            4) disable_docker_proxy ;;
-            5) disable_docker_cli_proxy ;;
-            6) disable_containerd_proxy ;;
-            7)
-                disable_os_env_proxy
-                remove_auto_package_manager_proxy
-                disable_docker_proxy
-                disable_docker_cli_proxy
-                disable_containerd_proxy
-                ;;
-        esac
+        if [ "$(detect_os)" = "darwin" ]; then
+            case $selection in
+                1) disable_os_env_proxy ;;
+                2) remove_auto_package_manager_proxy ;;
+                3) disable_docker_proxy ;;
+                4) disable_docker_cli_proxy ;;
+                5)
+                    disable_os_env_proxy
+                    remove_auto_package_manager_proxy
+                    disable_docker_proxy
+                    disable_docker_cli_proxy
+                    ;;
+            esac
+        else
+            case $selection in
+                1) disable_os_env_proxy ;;
+                2) remove_auto_package_manager_proxy ;;
+                3) remove_old_apt_proxy ;;
+                4) disable_docker_proxy ;;
+                5) disable_docker_cli_proxy ;;
+                6) disable_containerd_proxy ;;
+                7)
+                    disable_os_env_proxy
+                    remove_auto_package_manager_proxy
+                    disable_docker_proxy
+                    disable_docker_cli_proxy
+                    disable_containerd_proxy
+                    ;;
+            esac
+        fi
     done
 }
 
@@ -118,41 +163,65 @@ menu_test_proxy_health() {
 }
 
 menu_test_proxies() {
-    dialog --title "Test Proxies" \
-    --menu "Choose the action you want to test:" 15 70 10 \
-    1 "Test OS Proxy" \
-    2 "Test Docker Service Proxy" \
-    3 "Test Docker CLI Proxy" \
-    4 "Test Package Manager Proxy (Auto-detect)" \
-    5 "Test APT Proxy (Debian/Ubuntu only)" \
-    6 "Test Proxy Performance" \
-    7 "Test Proxy Health" 2>tempfile
+    if [ "$(detect_os)" = "darwin" ]; then
+        dialog --title "Test Proxies" \
+        --menu "Choose the action you want to test:" 14 70 8 \
+        1 "Test OS Proxy" \
+        2 "Test Docker Desktop Proxy" \
+        3 "Test Docker CLI Proxy" \
+        4 "Test Homebrew Proxy" \
+        5 "Test Proxy Performance" \
+        6 "Test Proxy Health" 2>tempfile
+    else
+        dialog --title "Test Proxies" \
+        --menu "Choose the action you want to test:" 15 70 10 \
+        1 "Test OS Proxy" \
+        2 "Test Docker Service Proxy" \
+        3 "Test Docker CLI Proxy" \
+        4 "Test Package Manager Proxy (Auto-detect)" \
+        5 "Test APT Proxy (Debian/Ubuntu only)" \
+        6 "Test Proxy Performance" \
+        7 "Test Proxy Health" 2>tempfile
+    fi
 
     local test_selection
     test_selection=$(<tempfile)
 
-    case $test_selection in
-        1) test_os_env_proxy ;;
-        2) test_docker_proxy ;;
-        3) test_docker_cli_proxy ;;
-        4) test_auto_package_manager_proxy ;;
-        5) test_apt_proxy ;;
-        6) menu_test_proxy_performance ;;
-        7) menu_test_proxy_health ;;
-    esac
+    if [ "$(detect_os)" = "darwin" ]; then
+        case $test_selection in
+            1) test_os_env_proxy ;;
+            2) test_docker_proxy ;;
+            3) test_docker_cli_proxy ;;
+            4) test_auto_package_manager_proxy ;;
+            5) menu_test_proxy_performance ;;
+            6) menu_test_proxy_health ;;
+        esac
+    else
+        case $test_selection in
+            1) test_os_env_proxy ;;
+            2) test_docker_proxy ;;
+            3) test_docker_cli_proxy ;;
+            4) test_auto_package_manager_proxy ;;
+            5) test_apt_proxy ;;
+            6) menu_test_proxy_performance ;;
+            7) menu_test_proxy_health ;;
+        esac
+    fi
 }
 
 menu_proxychains() {
-    if ! command -v proxychains4 &> /dev/null; then
-        dialog --title "Proxychains4 Not Available" \
-        --yesno "Proxychains4 is not installed on your system.\n\nProxychains4 is required for proxy chain functionality.\n\nWould you like to install it now?" 10 60
+    if ! proxychains_is_available; then
+        dialog --title "Proxychains Not Available" \
+        --yesno "Proxychains is not installed on your system.\n\nProxychains is required for proxy chain functionality.\n\nWould you like to install it now?" 10 60
 
         if [ $? -eq 0 ]; then
             if ! check_and_install_proxychains; then
                 return 0
             fi
         else
-            dialog --title "Info" --msgbox "Proxychains4 installation cancelled.\n\nYou can install it later with:\napt install proxychains4" 8 50
+            local tip="apt install proxychains4"
+            [ "$(detect_os)" = "darwin" ] && tip="brew install proxychains-ng"
+            dialog --title "Info" --msgbox "Proxychains installation cancelled.\n\nYou can install it later with:\n$tip" 8 50
             return 0
         fi
     fi
@@ -209,8 +278,10 @@ menu_session_apply() {
 }
 
 main_loop() {
+    local title_os="Linux"
+    [ "$(detect_os)" = "darwin" ] && title_os="macOS"
     while true; do
-        dialog --title "Manage the proxy configs on Linux and services quickly" \
+        dialog --title "Manage the proxy configs on $title_os and services quickly" \
         --backtitle "$SCRIPT_NAME" \
         --menu "Choose the action you want to perform (with space or mouse click):" 14 70 10 \
         1 "Configure Proxy Settings" \

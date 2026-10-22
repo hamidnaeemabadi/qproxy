@@ -2,39 +2,52 @@ check_proxy_server_location() {
     server_country=$(curl -s -x $1 http://ip-api.com/line/"$(curl -s -x $1 icanhazip.com)" | sed -n '2p')
 }
 
+# Portable millisecond clock (GNU date %N is unavailable on macOS/BSD)
+qproxy_now_ms() {
+    if command -v python3 >/dev/null 2>&1; then
+        python3 -c 'import time; print(int(time.time() * 1000))' 2>/dev/null && return 0
+    fi
+    if command -v perl >/dev/null 2>&1; then
+        perl -MTime::HiRes=time -e 'printf "%d\n", time * 1000' 2>/dev/null && return 0
+    fi
+    # Whole-second fallback
+    echo $(( $(date +%s) * 1000 ))
+}
+
 # Function to test proxy performance
 
 test_proxy_performance() {
     local proxy_url=$1
     local test_url="http://httpbin.org/bytes/1024"
-    
+    local time_start time_end proxy_time direct_time overhead
+
     echo "Testing proxy performance..."
     echo "Proxy: $proxy_url"
     echo "Test URL: $test_url"
     echo ""
-    
+
     # Test with proxy
     echo "With proxy:"
-    time_start=$(date +%s%N)
+    time_start=$(qproxy_now_ms)
     curl -x "$proxy_url" -o /dev/null -s --connect-timeout $PROXY_TIMEOUT --max-time $PROXY_READ_TIMEOUT "$test_url"
-    time_end=$(date +%s%N)
-    proxy_time=$(( (time_end - time_start) / 1000000 ))
+    time_end=$(qproxy_now_ms)
+    proxy_time=$(( time_end - time_start ))
     echo "Proxy response time: ${proxy_time}ms"
     echo ""
-    
+
     # Test without proxy
     echo "Without proxy:"
-    time_start=$(date +%s%N)
+    time_start=$(qproxy_now_ms)
     curl -o /dev/null -s --connect-timeout $PROXY_TIMEOUT --max-time $PROXY_READ_TIMEOUT "$test_url"
-    time_end=$(date +%s%N)
-    direct_time=$(( (time_end - time_start) / 1000000 ))
+    time_end=$(qproxy_now_ms)
+    direct_time=$(( time_end - time_start ))
     echo "Direct response time: ${direct_time}ms"
     echo ""
-    
+
     # Calculate overhead
     overhead=$(( proxy_time - direct_time ))
     echo "Proxy overhead: ${overhead}ms"
-    
+
     if [ $overhead -lt 100 ]; then
         echo "Performance: Excellent (< 100ms overhead)"
     elif [ $overhead -lt 300 ]; then

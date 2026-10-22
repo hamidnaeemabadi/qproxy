@@ -4,6 +4,23 @@ QPROXY_INSTALL_LIB="${QPROXY_INSTALL_LIB:-$QPROXY_INSTALL_PREFIX/lib/qproxy}"
 QPROXY_INSTALL_BIN="${QPROXY_INSTALL_BIN:-$QPROXY_INSTALL_PREFIX/bin/qproxy}"
 QPROXY_INSTALL_PROXYCHAINS_CONF="${QPROXY_INSTALL_PROXYCHAINS_CONF:-/etc/proxychains4.conf}"
 
+qproxy_install_resolve_proxychains_conf() {
+    if [ -n "${QPROXY_INSTALL_PROXYCHAINS_CONF_OVERRIDE:-}" ]; then
+        QPROXY_INSTALL_PROXYCHAINS_CONF="$QPROXY_INSTALL_PROXYCHAINS_CONF_OVERRIDE"
+        return 0
+    fi
+    if [ "$(detect_os)" = "darwin" ]; then
+        local brew_prefix
+        if brew_prefix=$(qproxy_brew_prefix); then
+            QPROXY_INSTALL_PROXYCHAINS_CONF="${brew_prefix}/etc/proxychains.conf"
+        else
+            QPROXY_INSTALL_PROXYCHAINS_CONF="/usr/local/etc/proxychains.conf"
+        fi
+    else
+        QPROXY_INSTALL_PROXYCHAINS_CONF="/etc/proxychains4.conf"
+    fi
+}
+
 qproxy_install_source_root() {
     echo "$QPROXY_ROOT"
 }
@@ -80,10 +97,12 @@ qproxy_install_proxychains_conf() {
     local bundled="$source_root/share/proxychains/proxychains4.conf"
     [ -f "$bundled" ] || bundled="${QPROXY_BUNDLED_PROXYCHAINS_CONF:-}"
     [ -f "$bundled" ] || return 0
+    qproxy_install_resolve_proxychains_conf
     if [ -f "$QPROXY_INSTALL_PROXYCHAINS_CONF" ] && [ "$force" != "true" ]; then
         echo "Keeping existing $QPROXY_INSTALL_PROXYCHAINS_CONF (use --force-proxychains-conf to replace)"
         return 0
     fi
+    install -d "$(dirname "$QPROXY_INSTALL_PROXYCHAINS_CONF")"
     install -m 644 "$bundled" "$QPROXY_INSTALL_PROXYCHAINS_CONF"
     echo "Installed default proxychains config: $QPROXY_INSTALL_PROXYCHAINS_CONF"
 }
@@ -112,8 +131,9 @@ Install QProxy under $QPROXY_INSTALL_PREFIX (default).
 
 Options:
   --no-deps                  Skip installing dialog, jq, and curl
-  --proxychains-conf         Install share/proxychains/proxychains4.conf to /etc if missing
-  --force-proxychains-conf   Replace /etc/proxychains4.conf with bundled file
+  --proxychains-conf         Install bundled proxychains conf if missing
+                             (Linux: /etc/proxychains4.conf; macOS: \$(brew --prefix)/etc/proxychains.conf)
+  --force-proxychains-conf   Replace existing proxychains conf with bundled file
   --prefix PATH              Install under PATH instead of /usr/local
   -h, --help                 Show this help
 
@@ -133,6 +153,7 @@ EOF
     done
 
     qproxy_install_validate_source "$source_root" || return 1
+    qproxy_install_resolve_proxychains_conf
 
     echo "Installing QProxy $VERSION ..."
     echo "  from: $source_root"

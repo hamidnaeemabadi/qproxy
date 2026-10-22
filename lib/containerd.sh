@@ -4,7 +4,18 @@ containerd_is_available() {
     command -v containerd &>/dev/null
 }
 
+containerd_unsupported_on_darwin() {
+    if [ "$(detect_os)" = "darwin" ]; then
+        echo "containerd: not supported on macOS (use Docker Desktop)" >&2
+        return 0
+    fi
+    return 1
+}
+
 containerd_set_http_proxy() {
+    if containerd_unsupported_on_darwin; then
+        return 1
+    fi
     if ! containerd_is_available; then
         echo "containerd: not found" >&2
         return 1
@@ -19,6 +30,9 @@ containerd_set_http_proxy() {
 }
 
 containerd_disable_proxy() {
+    if containerd_unsupported_on_darwin; then
+        return 1
+    fi
     if ! containerd_is_available; then
         echo "containerd: not found" >&2
         return 1
@@ -33,6 +47,9 @@ containerd_disable_proxy() {
 }
 
 containerd_test_proxy() {
+    if containerd_unsupported_on_darwin; then
+        return 1
+    fi
     if ! containerd_is_available; then
         echo "containerd: not found" >&2
         return 1

@@ -13,16 +13,42 @@ apply_proxy_to_current_session() {
     apply_session_to_user_shell
 }
 
-# Function to set os http proxy
+ensure_os_env_profile_hooks() {
+    [ "$(detect_os)" = "darwin" ] || return 0
+    local dest dir fragment
+    dir=$(dirname "$USER_PROXY_ENV_PATH")
+    mkdir -p "$dir"
+    fragment=$(cat <<EOF
 
-set_os_env_http_proxy() {
-    # Check proxy health before setting
-    if ! check_proxy_health "http://$HTTP_HOST:$HTTP_PORT"; then
-        dialog --title "Warning" --msgbox "Proxy health check failed. Proceeding anyway, but you may experience issues." 7 50
+$QPROXY_OS_ENV_MARKER_START
+[ -f "$USER_PROXY_ENV_PATH" ] && . "$USER_PROXY_ENV_PATH"
+$QPROXY_OS_ENV_MARKER_END
+EOF
+)
+    for dest in /etc/zprofile /etc/profile; do
+        if [ ! -f "$dest" ]; then
+            touch "$dest" 2>/dev/null || true
+        fi
+        if [ -f "$dest" ] && ! grep -qF "$QPROXY_OS_ENV_MARKER_START" "$dest" 2>/dev/null; then
+            printf '%s\n' "$fragment" >> "$dest"
+        fi
+    done
+}
+
+os_env_persist_msg() {
+    if [ "$(detect_os)" = "darwin" ]; then
+        echo "New shells: /etc/zprofile + /etc/profile (source $USER_PROXY_ENV_PATH)"
+    else
+        echo "New shells: /etc/profile.d"
     fi
-    
-    # Create the persistent configuration file
-    cat << EOP > $USER_PROXY_ENV_PATH
+}
+
+write_os_env_http_file() {
+    local dir
+    dir=$(dirname "$USER_PROXY_ENV_PATH")
+    mkdir -p "$dir"
+    ensure_os_env_profile_hooks
+    cat << EOP > "$USER_PROXY_ENV_PATH"
 export HTTP_PROXY="http://$HTTP_HOST:$HTTP_PORT"
 export http_proxy="http://$HTTP_HOST:$HTTP_PORT"
 export HTTPS_PROXY="http://$HTTP_HOST:$HTTP_PORT"
@@ -32,11 +58,39 @@ export no_proxy="$NO_PROXY_HOSTS"
 export HTTP_PROXY_CONNECTION_TIMEOUT="$PROXY_TIMEOUT"
 export HTTP_PROXY_READ_TIMEOUT="$PROXY_READ_TIMEOUT"
 EOP
-    
+}
+
+write_os_env_socks5_file() {
+    local dir
+    dir=$(dirname "$USER_PROXY_ENV_PATH")
+    mkdir -p "$dir"
+    ensure_os_env_profile_hooks
+    cat << EOP > "$USER_PROXY_ENV_PATH"
+export HTTP_PROXY="socks5h://$SOCKS5_HOST:$SOCKS5_PORT"
+export http_proxy="socks5h://$SOCKS5_HOST:$SOCKS5_PORT"
+export HTTPS_PROXY="socks5h://$SOCKS5_HOST:$SOCKS5_PORT"
+export https_proxy="socks5h://$SOCKS5_HOST:$SOCKS5_PORT"
+export NO_PROXY="$NO_PROXY_HOSTS"
+export no_proxy="$NO_PROXY_HOSTS"
+export HTTP_PROXY_CONNECTION_TIMEOUT="$PROXY_TIMEOUT"
+export HTTP_PROXY_READ_TIMEOUT="$PROXY_READ_TIMEOUT"
+EOP
+}
+
+# Function to set os http proxy
+
+set_os_env_http_proxy() {
+    # Check proxy health before setting
+    if ! check_proxy_health "http://$HTTP_HOST:$HTTP_PORT"; then
+        dialog --title "Warning" --msgbox "Proxy health check failed. Proceeding anyway, but you may experience issues." 7 50
+    fi
+
+    write_os_env_http_file
+
     # Apply to current session immediately
     apply_proxy_to_current_session
-    
-    dialog --title "Success" --msgbox "HTTP Proxy enabled (persistent).\n\nNew shells: /etc/profile.d\nThis terminal: $(session_auto_apply_msg)\n\nPersists after reboot." 11 58
+
+    dialog --title "Success" --msgbox "HTTP Proxy enabled (persistent).\n\n$(os_env_persist_msg)\nThis terminal: $(session_auto_apply_msg)\n\nPersists after reboot." 12 62
 }
 
 # Function to apply SOCKS5 proxy to current session
@@ -62,23 +116,13 @@ set_os_env_socks5_proxy() {
     if ! check_proxy_health "socks5h://$SOCKS5_HOST:$SOCKS5_PORT"; then
         dialog --title "Warning" --msgbox "Proxy health check failed. Proceeding anyway, but you may experience issues." 7 50
     fi
-    
-    # Create the persistent configuration file
-    sudo cat << EOP > $USER_PROXY_ENV_PATH
-export HTTP_PROXY="socks5h://$SOCKS5_HOST:$SOCKS5_PORT"
-export http_proxy="socks5h://$SOCKS5_HOST:$SOCKS5_PORT"
-export HTTPS_PROXY="socks5h://$SOCKS5_HOST:$SOCKS5_PORT"
-export https_proxy="socks5h://$SOCKS5_HOST:$SOCKS5_PORT"
-export NO_PROXY="$NO_PROXY_HOSTS"
-export no_proxy="$NO_PROXY_HOSTS"
-export HTTP_PROXY_CONNECTION_TIMEOUT="$PROXY_TIMEOUT"
-export HTTP_PROXY_READ_TIMEOUT="$PROXY_READ_TIMEOUT"
-EOP
-    
+
+    write_os_env_socks5_file
+
     # Apply to current session immediately
     apply_socks5_proxy_to_current_session
-    
-    dialog --title "Success" --msgbox "SOCKS5 Proxy enabled (persistent).\n\nNew shells: /etc/profile.d\nThis terminal: $(session_auto_apply_msg)\n\nPersists after reboot." 11 58
+
+    dialog --title "Success" --msgbox "SOCKS5 Proxy enabled (persistent).\n\n$(os_env_persist_msg)\nThis terminal: $(session_auto_apply_msg)\n\nPersists after reboot." 12 62
 }
 
 # Function to remove proxy from current session
@@ -101,13 +145,10 @@ remove_proxy_from_current_session() {
 
 disable_os_env_proxy() {
     # Remove the persistent configuration file
-    rm -f $USER_PROXY_ENV_PATH
-    
+    rm -f "$USER_PROXY_ENV_PATH"
+
     # Remove from current session immediately
     remove_proxy_from_current_session
-    
+
     dialog --title "Success" --msgbox "Persistent proxy disabled.\n\n$(session_auto_apply_msg)" 9 58
 }
-
-# Function to remove apt proxy
-

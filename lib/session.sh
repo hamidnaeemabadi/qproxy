@@ -61,9 +61,12 @@ EOF
         chown_qproxy_user_file "$bashrc"
     fi
 
-    if [ -f "$zshrc" ]; then
-        if ! grep -qF "$QPROXY_HOOK_MARKER_START" "$zshrc" 2>/dev/null; then
-            cat >> "$zshrc" <<'EOF'
+    if [ ! -f "$zshrc" ]; then
+        touch "$zshrc"
+        chown_qproxy_user_file "$zshrc"
+    fi
+    if ! grep -qF "$QPROXY_HOOK_MARKER_START" "$zshrc" 2>/dev/null; then
+        cat >> "$zshrc" <<'EOF'
 
 # >>> QProxy session auto-apply START >>>
 __qproxy_session_auto_apply() {
@@ -76,8 +79,7 @@ if [[ -o interactive ]] && [[ "${precmd_functions[*]:-}" != *__qproxy_session_au
 fi
 # <<< QProxy session auto-apply END <<<
 EOF
-            chown_qproxy_user_file "$zshrc"
-        fi
+        chown_qproxy_user_file "$zshrc"
     fi
 }
 
@@ -90,6 +92,10 @@ mark_session_apply_pending() {
 
 inject_source_into_invoking_shell() {
     local shell_pid session_file quser cmd pending
+    # /proc/$pid/fd/0 injection is Linux-only; macOS relies on shell hooks + pending file
+    if [ "$(detect_os)" = "darwin" ] || [ ! -d /proc ]; then
+        return 1
+    fi
     resolve_qproxy_session_env_file
     pending=$(resolve_qproxy_session_pending_file)
     [ -f "$pending" ] || return 1

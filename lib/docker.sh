@@ -2,7 +2,11 @@ docker_is_available() {
     command -v docker &>/dev/null
 }
 
-docker_service_restart() {
+docker_darwin_daemon_json() {
+    echo "$(get_qproxy_user_home)/.docker/daemon.json"
+}
+
+docker_service_restart_linux() {
     if [ -f "/etc/docker/daemon.json" ]; then
         local live_restore docker_info
         live_restore=$(jq -r '.["live-restore"]' /etc/docker/daemon.json)
@@ -19,11 +23,38 @@ docker_service_restart() {
     fi
 }
 
-docker_set_http_proxy() {
-    if ! docker_is_available; then
-        echo "docker: not found" >&2
-        return 1
+docker_service_restart_darwin() {
+    local qhome
+    qhome=$(get_qproxy_user_home)
+    if [ -d "/Applications/Docker.app" ] || [ -d "$qhome/Applications/Docker.app" ]; then
+        osascript -e 'quit app "Docker"' 2>/dev/null || true
+        sleep 2
+        if [ "$(id -u)" -eq 0 ]; then
+            local quser
+            quser=$(get_qproxy_user)
+            if [ "$quser" != "root" ]; then
+                sudo -u "$quser" open -a Docker 2>/dev/null || open -a Docker 2>/dev/null || true
+            else
+                open -a Docker 2>/dev/null || true
+            fi
+        else
+            open -a Docker 2>/dev/null || true
+        fi
+        echo "Docker Desktop restart requested." >&2
+    else
+        echo "Docker Desktop not found; apply ~/.docker/daemon.json and restart Docker manually." >&2
     fi
+}
+
+docker_service_restart() {
+    if [ "$(detect_os)" = "darwin" ]; then
+        docker_service_restart_darwin
+    else
+        docker_service_restart_linux
+    fi
+}
+
+docker_set_http_proxy_linux() {
     mkdir -p /etc/systemd/system/docker.service.d
     install_template "$QPROXY_TEMPLATES/docker-proxy.conf" /etc/systemd/system/docker.service.d/proxy.conf
     mkdir -p /etc/docker
@@ -46,10 +77,77 @@ docker_set_http_proxy() {
     docker_service_restart
 }
 
+docker_set_http_proxy_darwin() {
+    local cfg dir tmp http_url
+    cfg=$(docker_darwin_daemon_json)
+    dir=$(dirname "$cfg")
+    mkdir -p "$dir"
+    http_url=$(config_http_url)
+    tmp=$(mktemp)
+    if [ -f "$cfg" ] && [ -s "$cfg" ]; then
+        if ! jq -e . "$cfg" >/dev/null 2>&1; then
+            echo "docker: invalid JSON in $cfg (backing up)" >&2
+            cp "$cfg" "${cfg}.qproxy.bak"
+            printf '%s\n' '{}' > "$cfg"
+        fi
+        jq --arg http "$http_url" --arg https "$http_url" --arg nop "$NO_PROXY_HOSTS" \
+            '.proxies = {
+                "http-proxy": $http,
+                "https-proxy": $https,
+                "no-proxy": $nop
+            }' "$cfg" > "$tmp"
+    else
+        jq -n --arg http "$http_url" --arg https "$http_url" --arg nop "$NO_PROXY_HOSTS" \
+            '{proxies: {
+                "http-proxy": $http,
+                "https-proxy": $https,
+                "no-proxy": $nop
+            }}' > "$tmp"
+    fi
+    install -m 0644 "$tmp" "$cfg"
+    rm -f "$tmp"
+    chown_qproxy_user_file "$cfg"
+    docker_service_restart
+}
+
+docker_set_http_proxy() {
+    if ! docker_is_available; then
+        echo "docker: not found" >&2
+        return 1
+    fi
+    if [ "$(detect_os)" = "darwin" ]; then
+        docker_set_http_proxy_darwin
+    else
+        docker_set_http_proxy_linux
+    fi
+}
+
+docker_disable_proxy_darwin() {
+    local cfg tmp
+    cfg=$(docker_darwin_daemon_json)
+    if [ ! -f "$cfg" ]; then
+        return 2
+    fi
+    if ! jq -e 'has("proxies")' "$cfg" >/dev/null 2>&1; then
+        return 2
+    fi
+    tmp=$(mktemp)
+    jq 'del(.proxies)' "$cfg" > "$tmp"
+    install -m 0644 "$tmp" "$cfg"
+    rm -f "$tmp"
+    chown_qproxy_user_file "$cfg"
+    docker_service_restart
+    return 0
+}
+
 docker_disable_proxy() {
     if ! docker_is_available; then
         echo "docker: not found" >&2
         return 1
+    fi
+    if [ "$(detect_os)" = "darwin" ]; then
+        docker_disable_proxy_darwin
+        return $?
     fi
     if [ -f "/etc/systemd/system/docker.service.d/proxy.conf" ]; then
         rm -f /etc/systemd/system/docker.service.d/proxy.conf
@@ -64,17 +162,29 @@ docker_test_proxy() {
         echo "docker: not found" >&2
         return 1
     fi
-    if ! grep -q -E 'http://|socks5h://' /etc/systemd/system/docker.service.d/proxy.conf 2>/dev/null; then
+    if [ "$(detect_os)" = "darwin" ]; then
+        local cfg
+        cfg=$(docker_darwin_daemon_json)
+        if ! jq -e '.proxies["http-proxy"] | type == "string" and length > 0' "$cfg" >/dev/null 2>&1; then
+            echo "docker: daemon.json proxies missing or invalid ($cfg)" >&2
+            return 1
+        fi
+    elif ! grep -q -E 'http://|socks5h://' /etc/systemd/system/docker.service.d/proxy.conf 2>/dev/null; then
         echo "docker: proxy.conf missing or invalid" >&2
         return 1
     fi
     docker search nginx >/dev/null 2>&1
 }
 
-# Docker CLI client proxies (~/.docker/config.json) for all users + /etc/skel
+# Docker CLI client proxies (~/.docker/config.json)
 
 docker_cli_iter_homes() {
     local name _uid home
+    if [ "$(detect_os)" = "darwin" ]; then
+        home=$(get_qproxy_user_home)
+        [ -n "$home" ] && [ -d "$home" ] && echo "$home"
+        return 0
+    fi
     echo "/root"
     [ -d /etc/skel ] && echo "/etc/skel"
     getent passwd | while IFS=: read -r name _ _uid _ _ home _; do
@@ -89,6 +199,10 @@ docker_cli_iter_homes() {
 
 docker_cli_owner_for_home() {
     local home="$1" name
+    if [ "$(detect_os)" = "darwin" ]; then
+        get_qproxy_user
+        return
+    fi
     if [ "$home" = "/etc/skel" ]; then
         echo "root"
         return

@@ -26,3 +26,14 @@ jobs:
         run: |
           chmod +x run-tests.sh qproxy.sh
           ./run-tests.sh
+
+  bats-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install bats and runtime deps
+        run: brew install bats-core dialog jq
+      - name: Run tests
+        run: |
+          chmod +x run-tests.sh qproxy.sh
+          ./run-tests.sh
