@@ -40,6 +40,7 @@ source "$QPROXY_ROOT/lib/proxychains.sh"
 source "$QPROXY_ROOT/lib/ui/proxychains.sh"
 source "$QPROXY_ROOT/lib/configure.sh"
 source "$QPROXY_ROOT/lib/install.sh"
+source "$QPROXY_ROOT/lib/completion.sh"
 source "$QPROXY_ROOT/menus/main.sh"
 source "$QPROXY_ROOT/lib/cli.sh"
 

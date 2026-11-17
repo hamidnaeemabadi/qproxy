@@ -122,6 +122,7 @@ Most commands need root (`sudo qproxy …`). Exceptions: `config show`, `install
 | Option | Description |
 |--------|-------------|
 | `--no-deps` | Skip installing `dialog`, `jq`, `curl` |
+| `--completions` | Install Bash and Zsh completions in OS completion directories |
 | `--proxychains-conf` | Install bundled proxychains conf if missing |
 | `--force-proxychains-conf` | Replace existing proxychains conf |
 | `--prefix PATH` | Install under `PATH` instead of `/usr/local` |
@@ -166,10 +167,15 @@ sudo qproxy enable apt socks5          # Linux
 sudo qproxy enable pkgmgr              # Homebrew on macOS
 sudo qproxy enable docker
 qproxy enable docker-cli
+sudo qproxy enable docker socks5h       # Linux Docker Engine
+qproxy enable docker-cli socks5h
+sudo qproxy enable containerd socks5h   # Linux
 sudo qproxy enable proxychains dual
 
 # Disable
 sudo qproxy disable docker
+qproxy disable docker-cli
+sudo qproxy disable containerd
 sudo qproxy disable os-env
 
 # Tests
@@ -179,6 +185,68 @@ sudo qproxy test proxychains
 
 # Remove install
 sudo qproxy uninstall
+```
+
+Docker Engine (Linux), Docker CLI, and containerd accept `http` (default) or
+`socks5h` when enabling a proxy; `socks5` is also accepted and produces a
+`socks5h://` URL. SOCKS5H uses `SOCKS5_HOST` / `SOCKS5_PORT` from `~/.qproxy.env`.
+Enabling a mode replaces the target's previous mode. The same `disable` command
+removes either mode; the TUI offers both enable modes and a shared disable action.
+
+```mermaid
+flowchart LR
+    A[CLI or TUI: HTTP / SOCKS5H] --> B[Configured proxy URL]
+    B --> C[Docker / containerd systemd drop-in]
+    B --> D[Docker CLI config.json]
+    E[Disable target] --> F[Remove proxy configuration]
+```
+
+Docker CLI settings apply to **new containers and builds**, whose applications
+must support SOCKS5H; they do not proxy daemon image pulls. See the
+[Docker CLI proxy documentation](https://docs.docker.com/engine/cli/proxy/).
+Docker Desktop ignores `daemon.json` proxy settings, so QProxy's Docker SOCKS5H
+option on macOS reports instructions without writing a configuration or restarting
+Desktop. Enable or disable its proxy under **Settings > Resources > Proxies**;
+see [Docker Desktop proxy settings](https://docs.docker.com/desktop/settings-and-maintenance/settings/#proxies).
+Containerd remains Linux-only. Applying or removing service proxies uses the
+existing service restart behavior; validate on a test host before production use.
+
+## Shell completion
+
+Install both shell completions with QProxy or add them to an existing install:
+
+```bash
+sudo ./qproxy.sh install --completions
+sudo qproxy completion install
+
+# Generate scripts without installing or requiring sudo
+qproxy completion bash > qproxy.bash
+qproxy completion zsh > _qproxy
+```
+
+Completion covers commands, targets, proxy modes (including SOCKS5H), install
+options, and directories after `install --prefix`. On Linux it installs under
+`/usr/local/share/bash-completion/completions/qproxy` and
+`/usr/local/share/zsh/site-functions/_qproxy` (or the selected install prefix).
+On macOS it uses Homebrew's `etc/bash_completion.d/qproxy` and
+`share/zsh/site-functions/_qproxy`, falling back to `/usr/local` without Homebrew.
+`qproxy uninstall` removes QProxy-generated completions from these locations.
+
+Restart the shell after installation. Bash must already load the `bash-completion`
+framework; Zsh must run `autoload -Uz compinit; compinit` with the completion
+directory in `$fpath`. On Homebrew, run `brew shellenv` in shell startup before
+initializing completion. QProxy does not edit shell startup files or install a
+completion framework. See [Homebrew shell completion](https://docs.brew.sh/Shell-Completion)
+and [Bash completion setup](https://github.com/scop/bash-completion#installation).
+Custom prefixes must also be included in the shell's completion search path.
+
+```mermaid
+flowchart LR
+    A[CLI completion candidates] --> B[Bash / Zsh generator]
+    B --> C[completion bash / zsh: stdout]
+    B --> D[completion install / install --completions]
+    D --> E[OS completion directories]
+    E --> F[bash-completion / compinit]
 ```
 
 ## Proxychains

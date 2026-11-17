@@ -12,7 +12,9 @@ containerd_unsupported_on_darwin() {
     return 1
 }
 
-containerd_set_http_proxy() {
+containerd_set_proxy() {
+    local proxy_url
+    proxy_url=$(config_proxy_url "${1:-http}") || return 1
     if containerd_unsupported_on_darwin; then
         return 1
     fi
@@ -21,10 +23,7 @@ containerd_set_http_proxy() {
         return 1
     fi
     mkdir -p /etc/systemd/system/containerd.service.d
-    if [ -f "$CONTAINERD_PROXY_CONF" ]; then
-        rm -f "$CONTAINERD_PROXY_CONF"
-    fi
-    install_template "$QPROXY_TEMPLATES/containerd-proxy.conf" "$CONTAINERD_PROXY_CONF"
+    install_template "$QPROXY_TEMPLATES/containerd-proxy.conf" "$CONTAINERD_PROXY_CONF" "$proxy_url" || return 1
     systemctl daemon-reload
     systemctl restart containerd
 }
@@ -54,7 +53,7 @@ containerd_test_proxy() {
         echo "containerd: not found" >&2
         return 1
     fi
-    if ! grep -q 'http://' "$CONTAINERD_PROXY_CONF" 2>/dev/null; then
+    if ! grep -q -E 'http://|socks5h://' "$CONTAINERD_PROXY_CONF" 2>/dev/null; then
         echo "containerd: proxy.conf missing or invalid" >&2
         return 1
     fi
