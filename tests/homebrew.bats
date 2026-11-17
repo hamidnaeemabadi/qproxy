@@ -42,7 +42,7 @@ setup() {
     if [ "$(detect_os)" != "darwin" ]; then
         skip "Darwin-only"
     fi
-    run containerd_set_http_proxy
+    run containerd_set_proxy
     [ "$status" -ne 0 ]
     [[ "$output" == *"not supported on macOS"* ]] || [[ "$stderr" == *"not supported on macOS"* ]]
 }

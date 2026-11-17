@@ -1,8 +1,9 @@
-set_docker_http_proxy() {
-    if docker_set_http_proxy; then
-        ui_success "Success" "Docker HTTP Proxy configured successfully!"
+set_docker_proxy() {
+    local ptype="${1:-http}" error
+    if error=$(docker_set_proxy "$ptype" 2>&1); then
+        ui_success "Success" "Docker $ptype Proxy configured successfully!"
     else
-        ui_error "Error" "Docker not found!"
+        ui_error "Error" "Failed to configure Docker proxy.\n\n$error"
         return 1
     fi
 }
@@ -35,9 +36,10 @@ test_docker_proxy() {
     fi
 }
 
-set_docker_cli_http_proxy() {
-    if docker_cli_set_http_proxy; then
-        ui_success "Success" "Docker CLI HTTP Proxy configured for all users!"
+set_docker_cli_proxy() {
+    local ptype="${1:-http}"
+    if docker_cli_set_proxy "$ptype"; then
+        ui_success "Success" "Docker CLI $ptype Proxy configured successfully!"
     else
         ui_error "Error" "Failed to configure Docker CLI proxy!"
         return 1

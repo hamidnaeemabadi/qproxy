@@ -54,9 +54,9 @@ docker_service_restart() {
     fi
 }
 
-docker_set_http_proxy_linux() {
+docker_set_proxy_linux() {
     mkdir -p /etc/systemd/system/docker.service.d
-    install_template "$QPROXY_TEMPLATES/docker-proxy.conf" /etc/systemd/system/docker.service.d/proxy.conf
+    install_template "$QPROXY_TEMPLATES/docker-proxy.conf" /etc/systemd/system/docker.service.d/proxy.conf "$1" || return 1
     mkdir -p /etc/docker
     if [ -f "/etc/docker/daemon.json" ]; then
         cp /etc/docker/daemon.json /etc/docker/daemon.json.backup
@@ -77,7 +77,7 @@ docker_set_http_proxy_linux() {
     docker_service_restart
 }
 
-docker_set_http_proxy_darwin() {
+docker_set_proxy_darwin() {
     local cfg dir tmp http_url
     cfg=$(docker_darwin_daemon_json)
     dir=$(dirname "$cfg")
@@ -110,15 +110,21 @@ docker_set_http_proxy_darwin() {
     docker_service_restart
 }
 
-docker_set_http_proxy() {
+docker_set_proxy() {
+    local proxy_url
+    proxy_url=$(config_proxy_url "${1:-http}") || return 1
     if ! docker_is_available; then
         echo "docker: not found" >&2
         return 1
     fi
     if [ "$(detect_os)" = "darwin" ]; then
-        docker_set_http_proxy_darwin
+        if [ "${1:-http}" != "http" ]; then
+            echo "docker: configure SOCKS5 in Docker Desktop Settings > Resources > Proxies; daemon.json proxies are ignored by Desktop." >&2
+            return 1
+        fi
+        docker_set_proxy_darwin
     else
-        docker_set_http_proxy_linux
+        docker_set_proxy_linux "$proxy_url"
     fi
 }
 
@@ -252,13 +258,13 @@ docker_cli_write_config() {
     fi
 }
 
-docker_cli_set_http_proxy() {
+docker_cli_set_proxy() {
     local http_url home count=0
-    http_url=$(config_http_url)
+    http_url=$(config_proxy_url "${1:-http}") || return 1
 
     while IFS= read -r home; do
         [ -n "$home" ] || continue
-        docker_cli_write_config "$home" "$http_url" "$NO_PROXY_HOSTS"
+        docker_cli_write_config "$home" "$http_url" "$NO_PROXY_HOSTS" || return 1
         count=$((count + 1))
     done < <(docker_cli_iter_homes)
 

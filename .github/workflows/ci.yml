@@ -21,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install bats
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq bats
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bats zsh
       - name: Run tests
         run: |
           chmod +x run-tests.sh qproxy.sh

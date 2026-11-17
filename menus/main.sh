@@ -25,17 +25,22 @@ menu_enable_proxy() {
         2 "Enable SOCKS5 Proxy on OS ENV" off \
         3 "Enable HTTP Proxy on Homebrew" off \
         4 "Enable HTTP Proxy on Docker Desktop (daemon.json)" off \
-        5 "Enable HTTP Proxy on Docker CLI" off 2>tempfile
+        5 "Enable HTTP Proxy on Docker CLI" off \
+        6 "Enable SOCKS5H Proxy on Docker Desktop (manual setup)" off \
+        7 "Enable SOCKS5H Proxy on Docker CLI" off 2>tempfile
     else
         dialog --title "Enable Proxy" \
-        --checklist "Where you want to set the HTTP/SOCKS5 Proxy:" 15 74 9 \
+        --checklist "Where you want to set the HTTP/SOCKS5 Proxy:" 18 74 10 \
         1 "Enable HTTP Proxy on OS ENV" off \
         2 "Enable SOCKS5 Proxy on OS ENV" off \
         3 "Enable HTTP Proxy on Package Manager (Auto-detect)" off \
         4 "Enable SOCKS5 Proxy on APT (Debian/Ubuntu only)" off \
         5 "Enable HTTP Proxy on Docker Service" off \
         6 "Enable HTTP Proxy on Docker CLI (all users)" off \
-        7 "Enable HTTP Proxy on Containerd (K8s) Service" off 2>tempfile
+        7 "Enable HTTP Proxy on Containerd (K8s) Service" off \
+        8 "Enable SOCKS5H Proxy on Docker Service" off \
+        9 "Enable SOCKS5H Proxy on Docker CLI (all users)" off \
+        10 "Enable SOCKS5H Proxy on Containerd (K8s) Service" off 2>tempfile
     fi
 
     local selections selection
@@ -47,8 +52,10 @@ menu_enable_proxy() {
                 1) set_os_env_http_proxy ;;
                 2) set_os_env_socks5_proxy ;;
                 3) set_auto_package_manager_proxy ;;
-                4) set_docker_http_proxy ;;
-                5) set_docker_cli_http_proxy ;;
+                4) set_docker_proxy ;;
+                5) set_docker_cli_proxy ;;
+                6) set_docker_proxy socks5h ;;
+                7) set_docker_cli_proxy socks5h ;;
             esac
         else
             case $selection in
@@ -56,9 +63,12 @@ menu_enable_proxy() {
                 2) set_os_env_socks5_proxy ;;
                 3) set_auto_package_manager_proxy ;;
                 4) set_apt_socks5_proxy ;;
-                5) set_docker_http_proxy ;;
-                6) set_docker_cli_http_proxy ;;
-                7) set_containerd_http_proxy ;;
+                5) set_docker_proxy ;;
+                6) set_docker_cli_proxy ;;
+                7) set_containerd_proxy ;;
+                8) set_docker_proxy socks5h ;;
+                9) set_docker_cli_proxy socks5h ;;
+                10) set_containerd_proxy socks5h ;;
             esac
         fi
     done
@@ -70,8 +80,8 @@ menu_disable_proxy() {
         --checklist "Choose the action you want to perform (with space or mouse click):" 14 74 6 \
         1 "Disable HTTP/SOCKS5 Proxy on OS ENV" off \
         2 "Disable HTTP Proxy on Homebrew" off \
-        3 "Disable HTTP Proxy on Docker Desktop" off \
-        4 "Disable HTTP Proxy on Docker CLI" off \
+        3 "Disable QProxy Docker Desktop config (manual proxy: Settings)" off \
+        4 "Disable HTTP/SOCKS5H Proxy on Docker CLI" off \
         5 "Disable HTTP/SOCKS5 Completely" off 2>tempfile
     else
         dialog --title "Disable Proxy" \
@@ -79,9 +89,9 @@ menu_disable_proxy() {
         1 "Disable HTTP/SOCKS5 Proxy on OS ENV" off \
         2 "Disable HTTP Proxy on Package Manager (Auto-detect)" off \
         3 "Disable HTTP/SOCKS5 Proxy on APT" off \
-        4 "Disable HTTP/SOCKS5 Proxy on Docker Service" off \
-        5 "Disable HTTP Proxy on Docker CLI (all users)" off \
-        6 "Disable HTTP/SOCKS5 Proxy on Containerd (K8s) Service" off \
+        4 "Disable HTTP/SOCKS5H Proxy on Docker Service" off \
+        5 "Disable HTTP/SOCKS5H Proxy on Docker CLI (all users)" off \
+        6 "Disable HTTP/SOCKS5H Proxy on Containerd (K8s) Service" off \
         7 "Disable HTTP/SOCKS5 Completely" off 2>tempfile
     fi
 

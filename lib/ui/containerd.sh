@@ -1,10 +1,11 @@
-set_containerd_http_proxy() {
+set_containerd_proxy() {
+    local ptype="${1:-http}"
     if [ "$(detect_os)" = "darwin" ]; then
         ui_error "Error" "Containerd is not supported on macOS.\n\nUse Docker Desktop (docker / docker-cli targets) instead."
         return 1
     fi
-    if containerd_set_http_proxy; then
-        ui_success "Success" "Containerd HTTP Proxy configured successfully!"
+    if containerd_set_proxy "$ptype"; then
+        ui_success "Success" "Containerd $ptype Proxy configured successfully!"
     else
         ui_error "Error" "Containerd not found!"
         return 1

@@ -108,13 +108,13 @@ qproxy_install_proxychains_conf() {
 }
 
 qproxy_install() {
-    local source_root install_deps=true proxychains_conf=false force_proxychains=false
-    local arg
+    local source_root install_deps=true proxychains_conf=false force_proxychains=false completions=false
 
     source_root="$(qproxy_install_source_root)"
     while [ $# -gt 0 ]; do
         case "$1" in
             --no-deps) install_deps=false ;;
+            --completions) completions=true ;;
             --proxychains-conf) proxychains_conf=true ;;
             --force-proxychains-conf) proxychains_conf=true; force_proxychains=true ;;
             --prefix)
@@ -131,6 +131,7 @@ Install QProxy under $QPROXY_INSTALL_PREFIX (default).
 
 Options:
   --no-deps                  Skip installing dialog, jq, and curl
+  --completions              Install Bash and Zsh shell completions
   --proxychains-conf         Install bundled proxychains conf if missing
                              (Linux: /etc/proxychains4.conf; macOS: \$(brew --prefix)/etc/proxychains.conf)
   --force-proxychains-conf   Replace existing proxychains conf with bundled file
@@ -165,6 +166,10 @@ EOF
     qproxy_install_write_version "$source_root"
     qproxy_install_link_command
 
+    if [ "$completions" = true ]; then
+        qproxy_completion_install || return 1
+    fi
+
     if [ "$install_deps" = true ]; then
         echo "Installing runtime dependencies ..."
         install_runtime_deps || echo "Warning: some dependencies could not be installed automatically." >&2
@@ -181,6 +186,7 @@ EOF
 }
 
 qproxy_uninstall() {
+    qproxy_completion_uninstall || return 1
     echo "Removing QProxy $VERSION ..."
     if [ -L "$QPROXY_INSTALL_BIN" ]; then
         rm -f "$QPROXY_INSTALL_BIN"

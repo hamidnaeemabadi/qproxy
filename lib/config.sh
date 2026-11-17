@@ -90,6 +90,14 @@ qproxy_init_platform_paths
 config_http_url() { echo "http://${HTTP_HOST}:${HTTP_PORT}"; }
 config_socks5_url() { echo "socks5h://${SOCKS5_HOST}:${SOCKS5_PORT}"; }
 
+config_proxy_url() {
+    case "${1:-http}" in
+        http) config_http_url ;;
+        socks5|socks5h) config_socks5_url ;;
+        *) echo "Unknown type: $1 (use http or socks5h)" >&2; return 1 ;;
+    esac
+}
+
 install_template() {
     local template="$1" dest="$2"
     local tmp content version_tag dest_dir
@@ -98,6 +106,7 @@ install_template() {
     content=$(<"$template")
     content="${content//@HTTP_HOST@/$HTTP_HOST}"
     content="${content//@HTTP_PORT@/$HTTP_PORT}"
+    content="${content//@PROXY_URL@/${3:-$(config_http_url)}}"
     content="${content//@SOCKS5_HOST@/$SOCKS5_HOST}"
     content="${content//@SOCKS5_PORT@/$SOCKS5_PORT}"
     content="${content//@NO_PROXY_HOSTS@/$NO_PROXY_HOSTS}"

@@ -8,6 +8,8 @@ Usage:
   qproxy install [options]            Install QProxy system-wide
   qproxy install status               Show install location / status
   qproxy uninstall                    Remove system-wide install
+  qproxy completion bash|zsh          Generate shell completion script
+  qproxy completion install           Install Bash and Zsh completions
   qproxy config show                  Show current proxy configuration
   qproxy enable <target> [type]       Enable proxy on a target
   qproxy disable <target>             Disable proxy on a target
@@ -25,6 +27,7 @@ Targets (enable/disable):
 Types:
   enable os-env http|socks5
   enable apt http|socks5
+  enable docker|docker-cli|containerd http|socks5h
   enable proxychains http|socks5|dual
   test health http|socks5
   test pkgmgr|apt|docker|docker-cli|containerd|proxychains
@@ -124,16 +127,16 @@ cli_enable() {
             esac
             ;;
         pkgmgr) pkgmgr_set_http_proxy && echo "Package manager HTTP proxy enabled." ;;
-        docker) docker_set_http_proxy && echo "Docker HTTP proxy enabled." ;;
+        docker) docker_set_proxy "$ptype" && echo "Docker $ptype proxy enabled." ;;
         docker-cli)
-            docker_cli_set_http_proxy && echo "Docker CLI HTTP proxy enabled."
+            docker_cli_set_proxy "$ptype" && echo "Docker CLI $ptype proxy enabled."
             ;;
         containerd)
             if [ "$(detect_os)" = "darwin" ]; then
                 echo "containerd: not supported on macOS (use Docker Desktop)" >&2
                 return 1
             fi
-            containerd_set_http_proxy && echo "Containerd HTTP proxy enabled."
+            containerd_set_proxy "$ptype" && echo "Containerd $ptype proxy enabled."
             ;;
         proxychains)
             case "$ptype" in
@@ -214,6 +217,17 @@ cli_main() {
 
     case "${1:-}" in
         -h|--help|help) cli_usage ;;
+        completion)
+            case "${2:-}" in
+                bash|zsh) qproxy_completion_generate "$2" ;;
+                install)
+                    cli_require_root "$@"
+                    qproxy_completion_install
+                    ;;
+                -h|--help) echo 'Usage: qproxy completion bash|zsh|install' ;;
+                *) echo 'Usage: qproxy completion bash|zsh|install' >&2; return 1 ;;
+            esac
+            ;;
         install)
             case "${2:-}" in
                 status) qproxy_install_status ;;
